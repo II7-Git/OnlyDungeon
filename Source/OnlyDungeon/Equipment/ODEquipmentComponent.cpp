@@ -64,7 +64,21 @@ void UODEquipmentComponent::EquipWeapon(UODWeaponData* NewWeaponData)
 		}
 	}
 
-	// 3) 이동 애니메이션 레이어
+	// 3) 무기별 애님 블루프린트 (대기·이동 모션)
+	if (NewWeaponData->AnimInstanceClass)
+	{
+		USkeletalMeshComponent* Mesh = Character->GetMesh();
+		if (!DefaultAnimInstanceClass)
+		{
+			DefaultAnimInstanceClass = Mesh->GetAnimClass();
+		}
+		if (Mesh->GetAnimClass() != NewWeaponData->AnimInstanceClass)
+		{
+			Mesh->SetAnimInstanceClass(NewWeaponData->AnimInstanceClass);
+		}
+	}
+
+	// 4) 이동 애니메이션 레이어
 	if (NewWeaponData->AnimLayerClass)
 	{
 		Character->GetMesh()->LinkAnimClassLayers(NewWeaponData->AnimLayerClass);
@@ -110,6 +124,12 @@ void UODEquipmentComponent::UnequipWeapon()
 		if (WeaponData->AnimLayerClass && IsValid(Character->GetMesh()))
 		{
 			Character->GetMesh()->UnlinkAnimClassLayers(WeaponData->AnimLayerClass);
+		}
+
+		// 무기 애님 블루프린트를 썼다면 기본으로 되돌린다.
+		if (WeaponData->AnimInstanceClass && DefaultAnimInstanceClass && IsValid(Character->GetMesh()) && Character->GetMesh()->GetAnimClass() != DefaultAnimInstanceClass)
+		{
+			Character->GetMesh()->SetAnimInstanceClass(DefaultAnimInstanceClass);
 		}
 	}
 

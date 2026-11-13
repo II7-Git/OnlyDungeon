@@ -64,4 +64,8 @@ private:
 
 	UPROPERTY()
 	FODAbilitySet_GrantedHandles WeaponAbilityHandles;
+
+	/** 무기 애님 블루프린트로 바꾸기 전의 기본 애님 블루프린트 */
+	UPROPERTY()
+	TSubclassOf<UAnimInstance> DefaultAnimInstanceClass;
 };

@@ -58,6 +58,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Ability")
 	TObjectPtr<UODAbilitySet> AbilitySet;
 
+	/**
+	 * 장착 중 사용할 애님 블루프린트 (무기별 대기·이동 모션). 비우면 캐릭터 기본 애님 블루프린트 유지.
+	 * 무기별 ABP는 ABP_OD_Humanoid를 복제해 대기 시퀀스와 이동 블렌드스페이스만 바꾼다.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Animation")
+	TSubclassOf<UAnimInstance> AnimInstanceClass;
+
 	/** 장착 중 연결할 이동 애니메이션 레이어 (Linked Anim Layer). 비우면 기본 이동 유지 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Animation")
 	TSubclassOf<UAnimInstance> AnimLayerClass;
