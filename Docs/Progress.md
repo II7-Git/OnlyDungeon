@@ -30,7 +30,8 @@
 - `CLAUDE.md`: UE 5.9 고정, 승인 게이트, MCP 규칙, Git 규칙, 네이밍, 코딩 표준, GAS 규칙, 빌드 검증
 - `ValidateBuild.bat`: 에디터 타겟 빌드 검증 (에디터를 닫고 실행). 로그 `Saved/ValidateBuild/LastBuild.log`
 - `Tools/MCP/od-mcp-bridge.mjs`: Claude 데스크톱 앱 ↔ UE 5.9 내장 MCP(무상태 프로토콜 2026-07-28) 브리지
-- Git 원격: `https://github.com/II7-Git/OnlyDungeon.git` (`main`). 소스·설정·문서만 추적, `Content/` 미추적
+- Git 원격: `https://github.com/II7-Git/OnlyDungeon.git`. 소스·설정·문서만 추적, `Content/` 미추적
+- 브랜치: **`dev`에서 개발·테스트**, 검증이 끝나면 사용자 지시로 `main`에 병합 (Main-Dev 구조, 2026-11-13 도입)
 
 ### 2-2. C++ (`Source/OnlyDungeon/`)
 | 경로 | 클래스 / 내용 |
