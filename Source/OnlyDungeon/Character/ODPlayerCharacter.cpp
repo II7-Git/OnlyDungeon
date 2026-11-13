@@ -124,8 +124,10 @@ void AODPlayerCharacter::Input_Move(const FInputActionValue& Value)
 		return;
 	}
 
-	// 가드 중에는 제자리에서 막는다. (가드 모션이 하체까지 고정하므로 이동하면 미끄러져 보인다)
-	if (IsValid(AbilitySystemComponent) && AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Defending))
+	// 공격·가드 중에는 이동 입력을 받지 않는다.
+	// 공격 모션은 제자리 모션(루트 이동 없음)이라 이동 입력을 받으면 미끄러져 보인다. 전진은 콤보 어빌리티의 StepDistance가 담당한다.
+	if (IsValid(AbilitySystemComponent)
+		&& (AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Defending) || AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Attacking)))
 	{
 		return;
 	}
