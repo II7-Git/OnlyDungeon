@@ -10,6 +10,7 @@
 #include "Character/ODCharacterBase.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
+#include "Equipment/ODEquipmentComponent.h"
 #include "GameplayEffect.h"
 
 UODGameplayAbility_MeleeCombo::UODGameplayAbility_MeleeCombo(const FObjectInitializer& ObjectInitializer)
@@ -51,6 +52,12 @@ void UODGameplayAbility_MeleeCombo::ActivateAbility(const FGameplayAbilitySpecHa
 	HitTask->EventReceived.AddDynamic(this, &ThisClass::OnMeleeHit);
 	HitTask->ReadyForActivation();
 
+	// 무기를 공격용 부착 위치로 (무기 데이터에 지정된 경우만)
+	if (AODCharacterBase* OwnerCharacter = GetODCharacterFromActorInfo(); IsValid(OwnerCharacter) && IsValid(OwnerCharacter->GetEquipmentComponent()))
+	{
+		OwnerCharacter->GetEquipmentComponent()->SetAbilityAttachment(true);
+	}
+
 	UAbilityTask_PlayMontageAndWait* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, ComboMontage, MontagePlayRate, ComboSteps[0].Section);
 	MontageTask->OnCompleted.AddDynamic(this, &ThisClass::OnMontageFinished);
 	MontageTask->OnBlendOut.AddDynamic(this, &ThisClass::OnMontageFinished);
@@ -63,6 +70,11 @@ void UODGameplayAbility_MeleeCombo::ActivateAbility(const FGameplayAbilitySpecHa
 
 void UODGameplayAbility_MeleeCombo::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
+	if (AODCharacterBase* OwnerCharacter = GetODCharacterFromActorInfo(); IsValid(OwnerCharacter) && IsValid(OwnerCharacter->GetEquipmentComponent()))
+	{
+		OwnerCharacter->GetEquipmentComponent()->SetAbilityAttachment(false);
+	}
+
 	ComboIndex = 0;
 	bComboWindowOpen = false;
 	bComboQueued = false;

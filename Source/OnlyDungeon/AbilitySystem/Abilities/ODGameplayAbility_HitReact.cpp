@@ -32,7 +32,8 @@ void UODGameplayAbility_HitReact::ActivateAbility(const FGameplayAbilitySpecHand
 
 	const AActor* Avatar = GetAvatarActorFromActorInfo();
 	const AActor* Attacker = TriggerEventData ? TriggerEventData->Instigator.Get() : nullptr;
-	UAnimMontage* Montage = SelectMontage(Avatar, Attacker);
+	const bool bParried = TriggerEventData && TriggerEventData->EventMagnitude > 0.0f;
+	UAnimMontage* Montage = (bParried && IsValid(ParriedMontage)) ? ParriedMontage.Get() : SelectMontage(Avatar, Attacker);
 	if (!IsValid(Montage))
 	{
 		UE_LOG(LogODAbility, Warning, TEXT("[%s] 경직 몽타주가 지정되지 않았습니다."), *GetName());
