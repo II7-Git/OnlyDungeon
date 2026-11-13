@@ -4,6 +4,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "Abilities/Tasks/AbilityTask_ApplyRootMotionConstantForce.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "Animation/AnimMontage.h"
@@ -12,6 +13,7 @@
 #include "Core/ODLogChannels.h"
 #include "Equipment/ODEquipmentComponent.h"
 #include "GameplayEffect.h"
+#include "TimerManager.h"
 
 UODGameplayAbility_MeleeCombo::UODGameplayAbility_MeleeCombo(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -65,6 +67,8 @@ void UODGameplayAbility_MeleeCombo::ActivateAbility(const FGameplayAbilitySpecHa
 	MontageTask->OnCancelled.AddDynamic(this, &ThisClass::OnMontageCancelled);
 	MontageTask->ReadyForActivation();
 
+	StartStepForward();
+
 	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 콤보 시작: %s"), *GetName(), *ComboSteps[0].Section.ToString());
 }
 
@@ -74,6 +78,13 @@ void UODGameplayAbility_MeleeCombo::EndAbility(const FGameplayAbilitySpecHandle 
 	{
 		OwnerCharacter->GetEquipmentComponent()->SetAbilityAttachment(false);
 	}
+
+	if (const UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(StepDelayTimer);
+	}
+	// 태스크 자체는 어빌리티 종료 시 엔진이 정리한다.
+	StepTask = nullptr;
 
 	ComboIndex = 0;
 	bComboWindowOpen = false;
@@ -177,6 +188,7 @@ void UODGameplayAbility_MeleeCombo::TryAdvanceCombo()
 	}
 
 	MontageJumpToSection(ComboSteps[ComboIndex].Section);
+	StartStepForward();
 	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 콤보 진행: %s"), *GetName(), *ComboSteps[ComboIndex].Section.ToString());
 }
 
@@ -193,6 +205,64 @@ void UODGameplayAbility_MeleeCombo::RotateToInputDirection() const
 	{
 		Character->SetActorRotation(InputDirection.Rotation());
 	}
+}
+
+void UODGameplayAbility_MeleeCombo::StartStepForward()
+{
+	// 이전 타격의 전진이 끝나기 전에 다음 타격으로 넘어가면 끊고 새 방향으로 다시 민다.
+	if (IsValid(StepTask))
+	{
+		StepTask->EndTask();
+	}
+	StepTask = nullptr;
+
+	UWorld* World = GetWorld();
+	if (!IsValid(World) || !ComboSteps.IsValidIndex(ComboIndex))
+	{
+		return;
+	}
+	World->GetTimerManager().ClearTimer(StepDelayTimer);
+
+	const FODComboStep& Step = ComboSteps[ComboIndex];
+	if (Step.StepDistance <= 0.0f)
+	{
+		return;
+	}
+
+	if (Step.StepDelay > 0.0f)
+	{
+		World->GetTimerManager().SetTimer(StepDelayTimer, this, &ThisClass::ApplyStepForce, Step.StepDelay, false);
+	}
+	else
+	{
+		ApplyStepForce();
+	}
+}
+
+void UODGameplayAbility_MeleeCombo::ApplyStepForce()
+{
+	if (!IsActive() || !ComboSteps.IsValidIndex(ComboIndex))
+	{
+		return;
+	}
+
+	const AODCharacterBase* Character = GetODCharacterFromActorInfo();
+	if (!IsValid(Character))
+	{
+		return;
+	}
+
+	const FODComboStep& Step = ComboSteps[ComboIndex];
+	const float Duration = FMath::Max(Step.StepDuration, 0.01f);
+	const FVector Direction = Character->GetActorForwardVector().GetSafeNormal2D();
+
+	// 비가산(덮어쓰기) 방식이라 이동 입력과 섞이지 않고, 끝나면 속도를 0으로 맞춰 미끄러지지 않게 한다.
+	StepTask = UAbilityTask_ApplyRootMotionConstantForce::ApplyRootMotionConstantForce(
+		this, TEXT("ComboStep"), Direction, Step.StepDistance / Duration, Duration,
+		false, nullptr, ERootMotionFinishVelocityMode::SetVelocity, FVector::ZeroVector, 0.0f, true);
+	StepTask->ReadyForActivation();
+
+	UE_LOG(LogODAbility, Verbose, TEXT("[%s] %s 전진 %.0fcm / %.2f초"), *GetName(), *Step.Section.ToString(), Step.StepDistance, Duration);
 }
 
 void UODGameplayAbility_MeleeCombo::OnMontageFinished()

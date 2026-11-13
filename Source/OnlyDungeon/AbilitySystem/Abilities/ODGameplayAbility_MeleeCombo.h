@@ -6,6 +6,7 @@
 #include "AbilitySystem/ODGameplayAbility.h"
 #include "ODGameplayAbility_MeleeCombo.generated.h"
 
+class UAbilityTask_ApplyRootMotionConstantForce;
 class UAnimMontage;
 class UGameplayEffect;
 
@@ -26,6 +27,18 @@ struct FODComboStep
 	/** 강인도 피해 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo", meta = (ClampMin = "0.0"))
 	float PoiseDamage = 10.0f;
+
+	/** 이 타격에서 정면으로 전진할 거리(cm). 공격 모션이 제자리 모션이라 코드로 한 걸음을 만든다. 0이면 전진하지 않는다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Step", meta = (ClampMin = "0.0", Units = "cm"))
+	float StepDistance = 50.0f;
+
+	/** 전진에 걸리는 시간(초) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Step", meta = (ClampMin = "0.01", Units = "s"))
+	float StepDuration = 0.15f;
+
+	/** 섹션 시작 후 전진을 시작하기까지의 지연(초). 휘두르기 직전 발을 내딛는 타이밍에 맞추는 용도 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Step", meta = (ClampMin = "0.0", Units = "s"))
+	float StepDelay = 0.0f;
 };
 
 /**
@@ -38,6 +51,7 @@ struct FODComboStep
  * 동작
  * - 발동: 스태미나 비용 지불(CommitAbility) → 입력 방향으로 회전 → 첫 공격 섹션 재생
  * - 공격 중 다시 입력하면 예약해 두고, 콤보 입력 구간이 열려 있으면 즉시 다음 공격 섹션으로 넘어간다. (매 타격마다 비용 지불)
+ * - 공격 섹션이 시작될 때마다 타격의 StepDistance만큼 정면으로 전진한다. (Root Motion Source라 충돌을 지킨다)
  * - 입력이 없으면 후딜 섹션까지 재생되고 종료된다. 스태미나가 부족하면 다음 타격으로 넘어가지 않는다.
  * - 판정: 공격 섹션의 무기 판정 노티파이(UODAnimNotifyState_WeaponTrace)가 Event.Melee.Hit을 보내면
  *   현재 타격의 피해·강인도 피해를 SetByCaller로 담아 DamageEffectClass를 대상에게 적용한다.
@@ -82,6 +96,19 @@ private:
 
 	/** 이동 입력이 있으면 그 방향으로 즉시 회전 */
 	void RotateToInputDirection() const;
+
+	/** 현재 타격의 전진을 시작한다. 이전 전진이 남아 있으면 끊고 새로 시작한다. */
+	void StartStepForward();
+
+	/** 현재 타격의 전진 이동을 적용한다. (지연 타이머에서도 호출) */
+	void ApplyStepForce();
+
+	/** 진행 중인 전진 이동 태스크 */
+	UPROPERTY()
+	TObjectPtr<UAbilityTask_ApplyRootMotionConstantForce> StepTask;
+
+	/** StepDelay 대기 타이머 */
+	FTimerHandle StepDelayTimer;
 
 	UFUNCTION()
 	void OnComboWindowEvent(FGameplayEventData Payload);
