@@ -1,0 +1,147 @@
+﻿// OnlyDungeon 플레이어 캐릭터
+
+#include "ODPlayerCharacter.h"
+
+#include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Engine/LocalPlayer.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "InputActionValue.h"
+#include "InputMappingContext.h"
+#include "AbilitySystem/ODAbilitySystemComponent.h"
+#include "Core/ODGameplayTags.h"
+#include "Core/ODLogChannels.h"
+#include "Input/ODInputConfig.h"
+
+AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	GetCapsuleComponent()->InitCapsuleSize(42.0f, 96.0f);
+
+	// 컨트롤러 회전은 카메라에만 적용하고, 캐릭터는 이동 방향을 바라본다.
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationYaw = false;
+	bUseControllerRotationRoll = false;
+
+	UCharacterMovementComponent* MoveComp = GetCharacterMovement();
+	MoveComp->bOrientRotationToMovement = true;
+	MoveComp->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
+	MoveComp->MaxWalkSpeed = 500.0f;
+	MoveComp->MinAnalogWalkSpeed = 20.0f;
+	MoveComp->BrakingDecelerationWalking = 2000.0f;
+
+	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
+	CameraBoom->SetupAttachment(RootComponent);
+	CameraBoom->TargetArmLength = 400.0f;
+	CameraBoom->bUsePawnControlRotation = true;
+
+	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
+	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
+	FollowCamera->bUsePawnControlRotation = false;
+}
+
+void AODPlayerCharacter::NotifyControllerChanged()
+{
+	Super::NotifyControllerChanged();
+
+	// 기본 입력 매핑 등록. 템플릿 PlayerController가 이미 등록한 매핑과 중복되어도 안전하다.
+	const APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC || !IsValid(DefaultMappingContext))
+	{
+		return;
+	}
+
+	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+	{
+		if (!Subsystem->HasMappingContext(DefaultMappingContext))
+		{
+			Subsystem->AddMappingContext(DefaultMappingContext, DefaultMappingPriority);
+		}
+	}
+}
+
+void AODPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent);
+	if (!EIC)
+	{
+		UE_LOG(LogOD, Error, TEXT("%s: Enhanced Input 컴포넌트를 찾지 못함"), *GetNameSafe(this));
+		return;
+	}
+
+	if (!IsValid(InputConfig))
+	{
+		UE_LOG(LogOD, Warning, TEXT("%s: InputConfig가 지정되지 않아 입력을 연결하지 않음"), *GetNameSafe(this));
+		return;
+	}
+
+	// 이동/시점: C++ 함수에 직접 연결
+	if (const UInputAction* MoveAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Move))
+	{
+		EIC->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ThisClass::Input_Move);
+	}
+	if (const UInputAction* LookAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Look))
+	{
+		EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ThisClass::Input_Look);
+	}
+
+	// 어빌리티: 누름/뗌을 InputTag와 함께 ASC로 전달
+	for (const FODInputAction& Action : InputConfig->AbilityInputActions)
+	{
+		if (Action.InputAction && Action.InputTag.IsValid())
+		{
+			EIC->BindAction(Action.InputAction, ETriggerEvent::Started, this, &ThisClass::Input_AbilityPressed, Action.InputTag);
+			EIC->BindAction(Action.InputAction, ETriggerEvent::Completed, this, &ThisClass::Input_AbilityReleased, Action.InputTag);
+		}
+	}
+}
+
+void AODPlayerCharacter::Input_Move(const FInputActionValue& Value)
+{
+	const AController* MyController = GetController();
+	if (!MyController || IsDead())
+	{
+		return;
+	}
+
+	const FVector2D Axis = Value.Get<FVector2D>();
+	const FRotator YawRotation(0.0f, MyController->GetControlRotation().Yaw, 0.0f);
+	const FRotationMatrix YawMatrix(YawRotation);
+
+	AddMovementInput(YawMatrix.GetUnitAxis(EAxis::X), Axis.Y);
+	AddMovementInput(YawMatrix.GetUnitAxis(EAxis::Y), Axis.X);
+}
+
+void AODPlayerCharacter::Input_Look(const FInputActionValue& Value)
+{
+	if (!GetController())
+	{
+		return;
+	}
+
+	const FVector2D Axis = Value.Get<FVector2D>();
+	AddControllerYawInput(Axis.X);
+	AddControllerPitchInput(Axis.Y);
+}
+
+void AODPlayerCharacter::Input_AbilityPressed(FGameplayTag InputTag)
+{
+	if (IsValid(AbilitySystemComponent))
+	{
+		AbilitySystemComponent->AbilityInputTagPressed(InputTag);
+	}
+}
+
+void AODPlayerCharacter::Input_AbilityReleased(FGameplayTag InputTag)
+{
+	if (IsValid(AbilitySystemComponent))
+	{
+		AbilitySystemComponent->AbilityInputTagReleased(InputTag);
+	}
+}
