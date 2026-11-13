@@ -40,6 +40,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Character")
 	bool IsDead() const;
 
+	/** 현재 락온 대상. 락온 시스템 구현 전까지는 nullptr를 반환한다. */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Character")
+	virtual AActor* GetLockOnTarget() const { return nullptr; }
+
 	/** 사망했을 때 */
 	UPROPERTY(BlueprintAssignable, Category = "OD|Character")
 	FODOnCharacterDeathSignature OnDeath;

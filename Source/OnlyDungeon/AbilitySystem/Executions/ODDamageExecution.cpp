@@ -5,6 +5,8 @@
 #include "AbilitySystem/Attributes/ODAttributeSet_Combat.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "Core/ODGameplayTags.h"
+#include "Core/ODLogChannels.h"
+#include "AbilitySystemComponent.h"
 
 namespace
 {
@@ -39,6 +41,14 @@ UODDamageExecution::UODDamageExecution()
 void UODDamageExecution::Execute_Implementation(const FGameplayEffectCustomExecutionParameters& ExecutionParams, FGameplayEffectCustomExecutionOutput& OutExecutionOutput) const
 {
 	const FGameplayEffectSpec& Spec = ExecutionParams.GetOwningSpec();
+
+	// 무적 상태(회피 무적 구간 등)면 피해·강인도 피해를 모두 무시한다.
+	const UAbilitySystemComponent* TargetASC = ExecutionParams.GetTargetAbilitySystemComponent();
+	if (IsValid(TargetASC) && TargetASC->HasMatchingGameplayTag(ODGameplayTags::State_Invulnerable))
+	{
+		UE_LOG(LogODCombat, Verbose, TEXT("피해 무시: 대상 %s 무적 상태"), *GetNameSafe(TargetASC->GetAvatarActor()));
+		return;
+	}
 
 	FAggregatorEvaluateParameters EvaluateParams;
 	EvaluateParams.SourceTags = Spec.CapturedSourceTags.GetAggregatedTags();
