@@ -8,7 +8,6 @@
 #include "Character/ODCharacterBase.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "TimerManager.h"
 
 UODGameplayAbility_Dodge::UODGameplayAbility_Dodge(const FObjectInitializer& ObjectInitializer)
@@ -26,7 +25,7 @@ void UODGameplayAbility_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle 
 		return;
 	}
 
-	const FVector InputDirection = GetDodgeInputDirection(Character);
+	const FVector InputDirection = GetMovementInputDirection(InputDeadZone);
 	AActor* LockOnTarget = Character->GetLockOnTarget();
 	const UAbilitySystemComponent* ASC = ActorInfo->AbilitySystemComponent.Get();
 	const bool bLockedOn = IsValid(LockOnTarget) && IsValid(ASC) && ASC->HasMatchingGameplayTag(ODGameplayTags::State_LockOn);
@@ -106,26 +105,6 @@ void UODGameplayAbility_Dodge::EndAbility(const FGameplayAbilitySpecHandle Handl
 	EndInvulnerable();
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
-}
-
-FVector UODGameplayAbility_Dodge::GetDodgeInputDirection(const ACharacter* Character) const
-{
-	// 직전 프레임에 소비된 이동 입력. 없으면 이동 컴포넌트의 가속 방향으로 보완한다.
-	FVector Input = Character->GetLastMovementInputVector();
-	if (Input.SizeSquared2D() < FMath::Square(InputDeadZone))
-	{
-		if (const UCharacterMovementComponent* Movement = Character->GetCharacterMovement(); IsValid(Movement))
-		{
-			Input = Movement->GetCurrentAcceleration();
-		}
-	}
-
-	Input.Z = 0.0f;
-	if (Input.IsNearlyZero())
-	{
-		return FVector::ZeroVector;
-	}
-	return Input.GetSafeNormal2D();
 }
 
 EODDodgeDirection UODGameplayAbility_Dodge::SelectDirection(const FVector& Forward, const FVector& InputDirection)

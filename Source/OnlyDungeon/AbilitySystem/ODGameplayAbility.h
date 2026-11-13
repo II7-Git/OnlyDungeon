@@ -48,6 +48,12 @@ public:
 	UODAbilitySystemComponent* GetODAbilitySystemComponentFromActorInfo() const;
 
 protected:
+	/**
+	 * 현재 이동 입력 방향 (월드 기준, Z 제거·정규화). 입력이 없으면 ZeroVector.
+	 * 직전 프레임에 소비된 입력을 쓰고, 없으면 이동 컴포넌트의 가속 방향으로 보완한다.
+	 */
+	FVector GetMovementInputDirection(float DeadZone = 0.1f) const;
+
 	virtual void OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec) override;
 	virtual void InputReleased(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) override;
 

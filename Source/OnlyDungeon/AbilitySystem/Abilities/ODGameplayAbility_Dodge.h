@@ -64,9 +64,6 @@ protected:
 	float InputDeadZone = 0.1f;
 
 private:
-	/** 현재 이동 입력(월드 기준, Z 제거·정규화). 입력이 없으면 ZeroVector */
-	FVector GetDodgeInputDirection(const ACharacter* Character) const;
-
 	/** 정면 기준 로컬 각도로 8방향 중 하나를 고른다 */
 	static EODDodgeDirection SelectDirection(const FVector& Forward, const FVector& InputDirection);
 

@@ -4,6 +4,7 @@
 
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "Character/ODCharacterBase.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 UODGameplayAbility::UODGameplayAbility(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -22,6 +23,31 @@ UODAbilitySystemComponent* UODGameplayAbility::GetODAbilitySystemComponentFromAc
 {
 	const FGameplayAbilityActorInfo* Info = GetCurrentActorInfo();
 	return Info ? Cast<UODAbilitySystemComponent>(Info->AbilitySystemComponent.Get()) : nullptr;
+}
+
+FVector UODGameplayAbility::GetMovementInputDirection(float DeadZone) const
+{
+	const AODCharacterBase* Character = GetODCharacterFromActorInfo();
+	if (!IsValid(Character))
+	{
+		return FVector::ZeroVector;
+	}
+
+	FVector Input = Character->GetLastMovementInputVector();
+	if (Input.SizeSquared2D() < FMath::Square(DeadZone))
+	{
+		if (const UCharacterMovementComponent* Movement = Character->GetCharacterMovement(); IsValid(Movement))
+		{
+			Input = Movement->GetCurrentAcceleration();
+		}
+	}
+
+	Input.Z = 0.0f;
+	if (Input.IsNearlyZero())
+	{
+		return FVector::ZeroVector;
+	}
+	return Input.GetSafeNormal2D();
 }
 
 void UODGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec)
