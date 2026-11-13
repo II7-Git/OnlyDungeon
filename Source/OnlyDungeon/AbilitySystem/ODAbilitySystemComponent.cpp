@@ -3,6 +3,7 @@
 #include "ODAbilitySystemComponent.h"
 
 #include "AbilitySystem/ODGameplayAbility.h"
+#include "AbilitySystem/Abilities/ODGameplayAbility_Dodge.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
 
@@ -19,8 +20,8 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 		return;
 	}
 
-	// 캔슬 구간: 지금 행동을 끊고 새 행동을 발동할 수 있다.
-	const bool bCanCancel = HasMatchingGameplayTag(ODGameplayTags::State_Cancelable);
+	// 캔슬 구간: 지금 행동을 끊고 회피를 발동할 수 있다. (캔슬은 회피만 가능)
+	const bool bInCancelWindow = HasMatchingGameplayTag(ODGameplayTags::State_Cancelable);
 
 	// 순회 중에는 어빌리티 목록이 바뀌면 안 되므로, 발동할 핸들을 모아 두었다가 순회가 끝난 뒤 발동한다.
 	TArray<FGameplayAbilitySpecHandle> HandlesToActivate;
@@ -37,10 +38,11 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 			Spec.InputPressed = true;
 
 			const UODGameplayAbility* ODAbility = Cast<UODGameplayAbility>(Spec.Ability);
+			const bool bCanCancel = bInCancelWindow && Spec.Ability->IsA<UODGameplayAbility_Dodge>();
 
 			if (Spec.IsActive())
 			{
-				// 캔슬 구간에서 같은 행동을 다시 누르면 끊고 새로 발동한다. (콤보처럼 직접 처리하는 어빌리티는 제외)
+				// 캔슬 구간에서 회피를 다시 누르면 끊고 새로 발동한다.
 				if (bCanCancel && ODAbility && !ODAbility->HandlesInputWhileActive())
 				{
 					HandlesToRestart.AddUnique(Spec.Handle);
@@ -55,15 +57,22 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 			if (ODAbility && ODAbility->GetActivationPolicy() != EODAbilityActivationPolicy::OnSpawn)
 			{
 				HandlesToActivate.AddUnique(Spec.Handle);
+				if (bCanCancel)
+				{
+					HandlesToRestart.AddUnique(Spec.Handle);
+				}
 			}
 		}
 	}
 
-	// 캔슬 구간이면 진행 중인 행동(Ability.Action)을 먼저 끊는다. 상태 태그가 풀려 새 행동이 막히지 않는다.
-	if (bCanCancel && (!HandlesToActivate.IsEmpty() || !HandlesToRestart.IsEmpty()))
+	// 캔슬 구간에서 회피를 눌렀으면 진행 중인 행동(Ability.Action)을 먼저 끊는다. 상태 태그가 풀려 회피가 막히지 않는다.
+	if (!HandlesToRestart.IsEmpty())
 	{
 		CancelActionAbilities();
-		HandlesToActivate.Append(HandlesToRestart);
+		for (const FGameplayAbilitySpecHandle& Handle : HandlesToRestart)
+		{
+			HandlesToActivate.AddUnique(Handle);
+		}
 	}
 
 	for (const FGameplayAbilitySpecHandle& Handle : HandlesToActivate)

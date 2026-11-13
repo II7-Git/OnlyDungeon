@@ -138,15 +138,11 @@ void AODPlayerCharacter::Input_Move(const FInputActionValue& Value)
 
 	// 공격·가드 중에는 이동 입력을 받지 않는다.
 	// 공격 모션은 제자리 모션(루트 이동 없음)이라 이동 입력을 받으면 미끄러져 보인다. 전진은 콤보 어빌리티의 StepDistance가 담당한다.
-	// 단, 캔슬 구간(후딜)에서는 행동을 끊고 바로 움직인다.
+	// 행동 캔슬은 회피만 가능하다. (입력 방향은 위에서 기록해 두어 회피 방향에 쓰인다)
 	if (IsValid(AbilitySystemComponent)
 		&& (AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Defending) || AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Attacking)))
 	{
-		if (!AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Cancelable))
-		{
-			return;
-		}
-		AbilitySystemComponent->CancelActionAbilities();
+		return;
 	}
 
 	AddMovementInput(YawMatrix.GetUnitAxis(EAxis::X), Axis.Y);

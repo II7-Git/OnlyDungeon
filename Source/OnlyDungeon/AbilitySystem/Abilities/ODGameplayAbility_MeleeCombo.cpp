@@ -109,18 +109,6 @@ void UODGameplayAbility_MeleeCombo::InputPressed(const FGameplayAbilitySpecHandl
 	if (bComboWindowOpen)
 	{
 		TryAdvanceCombo();
-		return;
-	}
-
-	// 캔슬 구간(후딜)에서 다시 누르면 다음 타격으로 잇는다. 마지막 타격이면 첫 타격부터 다시 시작한다.
-	const UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
-	if (IsValid(ASC) && ASC->HasMatchingGameplayTag(ODGameplayTags::State_Cancelable))
-	{
-		if (!ComboSteps.IsValidIndex(ComboIndex + 1))
-		{
-			ComboIndex = -1;
-		}
-		TryAdvanceCombo();
 	}
 }
 
