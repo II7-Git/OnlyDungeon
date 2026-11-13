@@ -135,10 +135,12 @@
 | `IMC_Boss` | `/Game/OnlyDungeon/Input/` | 보스전(3인칭) 키 매핑. 필드용 `IMC_Field`는 모드 전환 단계에서 |
 | `DA_InputConfig_Player` | `/Game/OnlyDungeon/Input/` | 입력 액션 ↔ InputTag |
 | `GE_Init_Player` | `/Game/OnlyDungeon/AbilitySystem/Effects/` | 초기 수치: 체력 100, 강인도 50, 스태미나 100(회복 25/초), 공격력 10, 방어력 0, 무게 0 (초안) |
-| `DA_AbilitySet_Player` | `/Game/OnlyDungeon/AbilitySystem/` | `GE_Init_Player` + `GA_Dodge`(`InputTag.Dodge`) + `GA_StaminaRegen`(패시브) |
+| `DA_AbilitySet_Player` | `/Game/OnlyDungeon/AbilitySystem/` | `GE_Init_Player` + `GA_Dodge`(`InputTag.Dodge`) + `GA_StaminaRegen`(패시브) + `GA_Attack_Light`(`InputTag.Attack.Light`) |
 | `BP_ODPlayer` | `/Game/OnlyDungeon/Characters/` | `AODPlayerCharacter` 기반, Manny 메시 + `ABP_Unarmed` |
 | `BP_ODGameMode` | `/Game/OnlyDungeon/Core/` | 기본 폰 `BP_ODPlayer`, 엔진 기본 PlayerController. 프로젝트 전역 GameMode |
-| `L_OD_Prototype` | `/Game/OnlyDungeon/Maps/` | 템플릿 레벨 복제본. 게임·에디터 시작 맵 |
+| `L_OD_Test_Combat` | `/Game/OnlyDungeon/Maps/` | 전투 테스트 맵. 게임·에디터 시작 맵. 허수아비 `BP_ODEnemy_Dummy` 3개 |
+| `L_OD_Prototype` | `/Game/OnlyDungeon/Maps/` | 템플릿 레벨 복제본 |
+| `GA_Attack_Light` | `/Game/OnlyDungeon/AbilitySystem/Abilities/` | `UODGameplayAbility_MeleeCombo` 기반. `AM_OH_LightCombo`(A~D 4타), 1타당 스태미나 10(`GE_Cost_Attack_Light`) |
 | `GA_Dodge` | `/Game/OnlyDungeon/AbilitySystem/Abilities/` | `UODGameplayAbility_Dodge` 기반. 상태 `State.Dodging`, 차단 Dead/Stunned/Dodging |
 | `GE_Cost_Dodge` | `/Game/OnlyDungeon/AbilitySystem/Effects/` | 스태미나 -20 (초안) |
 | `GA_StaminaRegen` | `/Game/OnlyDungeon/AbilitySystem/Abilities/` | `UODGameplayAbility_StaminaRegen` 기반 패시브 |
@@ -146,6 +148,8 @@
 | `AM_Roll_*` 8개 | `/Game/OnlyDungeon/Animation/Common/Montages/` | `CM_Roll_*` 기반 몽타주, `DefaultSlot`, 루트 모션 |
 
 **회피 구현 (2026-11-13, PIE 검증):** 비락온은 입력 방향으로 즉시 회전 후 정면 구르기, 입력이 없으면 뒤로 구르기. 락온 중에는 대상을 바라보고 8방향 구르기(락온 시스템 구현 후 동작). 무적은 시작 0.05초부터 0.4초간 `State.Invulnerable`이며, 이 태그가 있으면 피해 계산이 피해·강인도 피해를 무시합니다. 스태미나가 부족하면 발동하지 않습니다.
+
+**약공격 콤보 (2026-11-13, 판정 제외):** 몽타주 하나를 섹션으로 나눈 4타 콤보(Greystone `Attack_A~D_Slow` + `_Recovery`). 공격 중 입력은 예약되고, 콤보 입력 구간(공격 끝부분~후딜 앞부분)에서 다음 타격으로 넘어갑니다. 입력이 없으면 후딜까지 재생하고 끝납니다. 타격마다 스태미나 10 소모, 입력 방향으로 회전. 회피로 공격을 끊을 수 있습니다.
 
 **스태미나 자연 회복:** 스태미나를 소모하는 행동이 없는 상태로 1.5초가 지나면 회복을 시작합니다(초당 `StaminaRegenRate`, 현재 25). 회복 중 소모가 생기면 즉시 멈추고 다시 1.5초를 기다립니다. 가득 차면 회복 GE를 제거합니다.
 
@@ -209,6 +213,6 @@
 
 1. ~~전투 모션 확정 → UE5 Manny 리타겟~~ (완료)
 2. ~~GAS 기본 뼈대 구조안 승인~~ (완료) / ~~회피 어빌리티~~ (완료)
-3. ~~스태미나 자연 회복~~ (완료) / 약공격·강공격, 방어(패링·가드), 락온
+3. ~~스태미나 자연 회복~~ (완료) / ~~한손검 약공격 콤보~~ (완료, 판정 제외) / 무기·장비 구조, 적중 판정, 강공격, 방어(패링·가드), 락온
 4. 전투 모드 관리 컴포넌트 구조안 승인
 5. 프로토타입: 필드 1구간 + Stone Golem 보스전 + 모드 전환 컷신

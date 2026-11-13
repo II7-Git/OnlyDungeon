@@ -18,7 +18,9 @@
 | 기본 에셋 (입력, 초기 수치 GE, 어빌리티 세트, 플레이어 BP, GameMode, 맵) | 완료 |
 | 회피 어빌리티 | 완료 (PIE 검증) |
 | 스태미나 자연 회복 | 완료 (PIE 검증) |
-| 약공격 / 강공격 / 방어(패링·가드) / 락온 | 예정 |
+| 약공격 (한손검 4타 콤보, 판정 제외) | 완료 (PIE 검증) |
+| 테스트 맵 (`L_OD_Test_Combat`, 허수아비 3개) | 완료 |
+| 적중 판정·무기 / 강공격 / 방어(패링·가드) / 락온 / 대검 | 예정 |
 | 전투 모드 관리 컴포넌트 (필드 ↔ 보스전 전환) | 예정 (구조 승인 필요) |
 | 적 / 보스 AI | 예정 |
 
@@ -36,6 +38,7 @@
 ### 2-2. C++ (`Source/OnlyDungeon/`)
 | 경로 | 클래스 / 내용 |
 |---|---|
+| `Animation/ODAnimNotifyState_GameplayEventWindow` | 애니메이션 구간 시작·끝에 게임플레이 이벤트 전송 (콤보 입력 구간, 이후 판정 구간) |
 | `Core/ODLogChannels` | `LogOD`, `LogODCombat`, `LogODAbility`, `LogODAI` |
 | `Core/ODGameplayTags` | 네이티브 태그 (`InputTag.*`, `Mode.*`, `State.*`, `Event.*`, `Data.*`, `Cooldown.*`, `Weapon.Type.*`) |
 | `AbilitySystem/ODAbilitySystemComponent` | InputTag 기반 어빌리티 발동 (눌림/뗌) |
@@ -45,43 +48,51 @@
 | `AbilitySystem/Attributes/ODAttributeSet_Combat` | 스태미나·회복 속도·공격력·방어력·무게 |
 | `AbilitySystem/Executions/ODDamageExecution` | 임시 피해식 `기본 + 공격력 - 방어력`. 대상이 `State.Invulnerable`이면 무시 |
 | `AbilitySystem/Abilities/ODGameplayAbility_Dodge` | 회피 (비락온: 입력 방향 회전 후 정면 구르기 / 입력 없음: 뒤 구르기 / 락온: 8방향). 무적 구간, 스태미나 비용 |
+| `AbilitySystem/Abilities/ODGameplayAbility_MeleeCombo` | 섹션 콤보 근접 공격 (입력 예약, 콤보 구간에서 다음 타격, 타격마다 스태미나·입력 방향 회전) |
 | `AbilitySystem/Abilities/ODGameplayAbility_StaminaRegen` | 스태미나 자연 회복 패시브 (마지막 소모 1.5초 후 회복 GE 적용, 가득 차면 제거) |
 | `Character/ODCharacterBase` | ASC·AttributeSet 보유, 사망/강인도 붕괴 처리, `GetLockOnTarget()`(락온 구현 전 nullptr) |
 | `Character/ODPlayerCharacter` | 카메라, Enhanced Input → InputTag 바인딩 |
 | `Character/ODEnemyCharacter` | 적 기반 (AI 자동 빙의) |
 | `Input/ODInputConfig` | 입력 액션 ↔ InputTag DataAsset |
+| `../OnlyDungeonEditor/` (에디터 전용 모듈) | `UODMontageEditorLibrary`: Python에서 몽타주 세그먼트·섹션 구성 (`build_sectioned_montage`) |
 
 ### 2-3. 에디터 에셋 (`/Game/OnlyDungeon/`)
 | 경로 | 내용 |
 |---|---|
 | `Animation/Retarget/` | Paragon → Manny 리타겟 리소스 |
-| `Animation/OneHandSword/` (`OH_*`), `TwoHandSword/` (`TH_*`) | Greystone 한손검, Kwang 대검 모션 |
+| `Animation/OneHandSword/` (`OH_*`), `TwoHandSword/` (`TH_*`) | Greystone 한손검, Kwang 대검 모션. `OH_Attack_A~D_Slow(+_Recovery)`는 루트 모션 사용 |
+| `Animation/OneHandSword/Montages/AM_OH_LightCombo` | 섹션 A→A_Rec, B→B_Rec, C→C_Rec, D→D_Rec. 콤보 입력 구간: A·B·C 시작 +0.6초부터 0.5초 |
 | `Animation/Common/` (`CM_Roll_*` 8방향) | 구르기 모션. `Montages/AM_Roll_*` 8개 (`DefaultSlot`) |
 | `Input/Actions/` | `IA_Move`, `IA_Look`, `IA_Attack_Light`, `IA_Attack_Heavy`, `IA_Dodge`, `IA_Defense`, `IA_Skill_1`, `IA_Skill_2`, `IA_LockOn`, `IA_UseItem` |
 | `Input/IMC_Boss`, `Input/DA_InputConfig_Player` | 보스전 키 매핑 (좌클릭 약공격, 우클릭 강공격, Shift 방어, Space 회피), 입력 설정 |
-| `AbilitySystem/Effects/` | `GE_Init_Player`(초기 수치), `GE_Cost_Dodge`(스태미나 -20), `GE_Regen_Stamina`(0.1초마다 회복 속도×0.1) |
-| `AbilitySystem/Abilities/` | `GA_Dodge`, `GA_StaminaRegen` |
-| `AbilitySystem/DA_AbilitySet_Player` | `GE_Init_Player` + `GA_Dodge`(`InputTag.Dodge`) + `GA_StaminaRegen`(패시브) |
+| `AbilitySystem/Effects/` | `GE_Init_Player`(초기 수치), `GE_Cost_Dodge`(스태미나 -20), `GE_Cost_Attack_Light`(-10), `GE_Regen_Stamina`(0.1초마다 회복 속도×0.1), `GE_Init_Enemy_Dummy`(체력 1000) |
+| `AbilitySystem/Abilities/` | `GA_Dodge`, `GA_StaminaRegen`, `GA_Attack_Light` |
+| `AbilitySystem/DA_AbilitySet_Player` | `GE_Init_Player` + `GA_Dodge`(Space) + `GA_StaminaRegen`(패시브) + `GA_Attack_Light`(좌클릭) |
+| `AbilitySystem/DA_AbilitySet_Enemy_Dummy` | `GE_Init_Enemy_Dummy` |
+| `Characters/Enemies/BP_ODEnemy_Dummy` | 테스트용 허수아비 (Quinn 메시, 행동 없음) |
 | `Characters/BP_ODPlayer` | 플레이어 (Manny + `ABP_Unarmed`) |
 | `Core/BP_ODGameMode` | 기본 폰 `BP_ODPlayer`. 프로젝트 전역 GameMode |
-| `Maps/L_OD_Prototype` | 테스트 맵 (게임·에디터 시작 맵) |
+| `Maps/L_OD_Test_Combat` | **전투 테스트 맵 (게임·에디터 시작 맵).** 80m 평지, 허수아비 3개(정면 6m, 좌우 10m) |
+| `Maps/L_OD_Prototype` | 템플릿 레벨 복제본 (지형 테스트용) |
 
 ---
 
 ## 3. 진행 중
 
-- 없음 (다음 작업 대기)
+- 없음 (다음: 한손검·대검 완성. 무기·장비 구조안 승인 필요)
 
 ### 최근 검증 기록
 - **회피 (2026-11-13):** 입력 방향 회전 후 구르기 약 3m, 입력 없으면 뒤 구르기, 스태미나 20 소모, 0이면 발동 불가, 무적 약 0.08~0.48초.
+- **약공격 (2026-11-13):** 단타 A→A_Rec 후 종료, 연타 시 A→B→C→D→D_Rec, 타격마다 스태미나 10 소모.
 - **스태미나 회복 (2026-11-13):** 마지막 소모 1.51초 후 회복 시작, 초당 25 회복, 회복 중 소모 시 즉시 정지 후 1.5초 대기 재시작, 가득 차면 회복 GE 제거.
 
 ## 4. 다음 할 일 (순서는 사용자와 조율)
 
-1. 약공격 (한손검 콤보, Paragon Greystone 모션)
-2. 강공격 (보스전 전용)
-3. 방어: 한손검 패링, 대검 가드 (무기 데이터가 방식 결정)
-4. 락온 (`State.LockOn`, `GetLockOnTarget()` 구현 → 회피 8방향 활성화)
+1. 무기·장비 구조 (무기 데이터, 무기 메시 부착, 무기별 모션·어빌리티 세트) — 구조안 승인 필요
+2. 적중 판정 (무기 궤적 트레이스, 피해 GE, 피격 반응)
+3. 강공격 (보스전 전용), 대검 약공격 콤보
+4. 방어: 한손검 패링, 대검 가드 (무기 데이터가 방식 결정)
+5. 락온 (`State.LockOn`, `GetLockOnTarget()` 구현 → 회피 8방향 활성화)
 5. 전투 모드 관리 컴포넌트 구조안 승인 → 필드/보스전 전환, `IMC_Field`
 6. 프로토타입: 필드 1구간 + Stone Golem 보스전 + 모드 전환 컷신
 
@@ -104,6 +115,8 @@
   - 블로킹 금지: `subprocess.run`, `time.sleep` 대신 `asyncio`를 사용합니다.
   - **레벨을 복제한 직후 같은 스크립트에서 그 레벨을 열면 에디터가 크래시합니다** (GC 미정리 → `EditorServer.cpp` Fatal). 레벨은 `EditorLoadingAndSavingUtils.save_map(world, 새경로)`로 복제하고, 여는 작업은 별도 호출로 합니다.
   - BlueprintReadWrite가 아닌 구조체(GameplayTag, GameplayAttribute, GameplayModifierInfo 등)는 `import_text("(...)")`로 설정합니다.
+  - 몽타주 섹션은 Python으로 만들 수 없어 `unreal.ODMontageEditorLibrary.build_sectioned_montage(montage, sequences, section_names, next_section_names)`를 씁니다. 노티파이는 `unreal.AnimationLibrary.add_animation_notify_state_event`.
+  - 새 레벨은 `LevelEditorSubsystem.new_level_from_template`을 단독 호출로 만들고, 액터 배치는 별도 호출로 합니다.
   - PIE 입력 테스트: `InputToolset.ApplyInput`(액션 경로 지정), 상태 확인은 Python에서 ASC 태그·Attribute를 프레임 단위로 샘플링합니다.
 - **파일 규칙:** C++ 소스는 UTF-8 BOM + CRLF, 한글 주석.
 
