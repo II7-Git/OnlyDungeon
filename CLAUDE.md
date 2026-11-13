@@ -2,10 +2,16 @@
 
 ## 0. 프로젝트 개요 (고정 전제)
 - **엔진 버전: Unreal Engine 5.9 고정.** `.uproject`의 `EngineAssociation`은 `"5.9"`이며, 엔진 업그레이드는 사용자 지시 없이 절대 하지 않는다. 다른 버전 전용 API나 문서를 근거로 코드를 작성하지 않는다.
-- **장르:** 3인칭 던전 액션. **전투 구현이 프로젝트의 핵심**이다.
+- **장르:** 던전 액션 (쿼터뷰 필드 + 3인칭 보스전). **전투 구현이 프로젝트의 핵심**이다. 세부 기획은 아래 참고 문서를 따른다.
 - **싱글플레이 전용:** 멀티플레이/네트워크 기능은 사용하지 않는다. (8장 참고)
 - **전투 프레임워크:** Gameplay Ability System(GAS)을 사용한다. (6장 참고)
 - **게임 모듈:** `OnlyDungeon` (Runtime). API 매크로는 `ONLYDUNGEON_API`.
+
+### 참고 문서
+- **기획서: `Docs/GameDesign.md`** — 게임 구조, 전투 모드, 장비, GAS 방향, 에셋 방침 등 모든 기획 결정의 기준이다.
+  - 기획과 관련된 판단이 필요하면 이 문서를 먼저 읽는다.
+  - 문서에 없거나 "미정"인 항목은 임의로 정하지 않고 사용자에게 묻는다.
+  - 기획 변경은 사용자 승인 후에만 이 문서에 반영한다. CLAUDE.md에는 기획 내용을 적지 않는다.
 
 ---
 
@@ -41,7 +47,7 @@
 ## 3. 버전 관리 규칙 (Source-Code Only Git Workflow)
 Git 저장소는 용량 최적화와 속도를 위해 **'순수 텍스트(소스 코드) 전용'**으로 운영한다. 에이전트는 다음 사항을 반드시 준수한다.
 
-- **추적 대상:** `Source/`, `Config/`, `.uproject`, `.Build.cs`/`.Target.cs`, `.gitignore`, `.gitattributes`, `.mcp.json`, `.vsconfig`, `ValidateBuild.bat`, `CLAUDE.md`
+- **추적 대상:** `Source/`, `Config/`, `.uproject`, `.Build.cs`/`.Target.cs`, `.gitignore`, `.gitattributes`, `.mcp.json`, `.vsconfig`, `ValidateBuild.bat`, `CLAUDE.md`, `Docs/`(기획 문서), `Tools/`(MCP 브리지 등 개발 도구)
 - **에셋 추적 영구 금지:** 바이너리 에셋(`.uasset`, `.umap`, `.fbx`, `.png` 등)이 있는 `Content/` 폴더는 절대 스테이징(`git add`)하거나 추적하지 않는다. 에셋 조작이 필요하면 사용자에게 알린다.
 - **빌드/임시 폴더 추적 금지:** `Binaries/`, `Intermediate/`, `Saved/`, `DerivedDataCache/`, `.vs/`와 IDE가 생성하는 `*.sln`/`*.slnx`는 커밋하지 않는다.
 - **`git add -A` / `git add .` 금지:** 변경한 파일만 경로를 지정해 스테이징하고, 커밋 전에 `git status`로 의도하지 않은 파일이 없는지 확인한다.
