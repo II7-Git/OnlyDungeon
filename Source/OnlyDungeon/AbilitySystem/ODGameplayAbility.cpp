@@ -5,6 +5,9 @@
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "Character/ODCharacterBase.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
+#include "AbilitySystemComponent.h"
+#include "Core/ODGameplayTags.h"
 
 UODGameplayAbility::UODGameplayAbility(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -33,7 +36,8 @@ FVector UODGameplayAbility::GetMovementInputDirection(float DeadZone) const
 		return FVector::ZeroVector;
 	}
 
-	FVector Input = Character->GetLastMovementInputVector();
+	// 공격 중처럼 이동 입력이 막힌 동안에도 플레이어가 누르고 있는 방향을 쓴다. (캔슬 회피 방향 등)
+	FVector Input = Character->GetDesiredMoveDirection();
 	if (Input.SizeSquared2D() < FMath::Square(DeadZone))
 	{
 		if (const UCharacterMovementComponent* Movement = Character->GetCharacterMovement(); IsValid(Movement))
@@ -73,4 +77,51 @@ void UODGameplayAbility::InputReleased(const FGameplayAbilitySpecHandle Handle, 
 	{
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
 	}
+}
+
+void UODGameplayAbility::ListenForCancelWindow()
+{
+	UAbilityTask_WaitGameplayEvent* Task = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ODGameplayTags::Event_Montage_CancelWindow, nullptr, false, true);
+	Task->EventReceived.AddDynamic(this, &ThisClass::OnCancelWindowEvent);
+	Task->ReadyForActivation();
+}
+
+void UODGameplayAbility::OnCancelWindowEvent(FGameplayEventData Payload)
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+	if (!IsValid(ASC))
+	{
+		return;
+	}
+
+	const bool bOpen = Payload.EventMagnitude > 0.0f;
+	if (bOpen && !bCancelWindowApplied)
+	{
+		ASC->AddLooseGameplayTag(ODGameplayTags::State_Cancelable);
+		bCancelWindowApplied = true;
+	}
+	else if (!bOpen)
+	{
+		ClearCancelWindow();
+	}
+}
+
+void UODGameplayAbility::ClearCancelWindow()
+{
+	if (!bCancelWindowApplied)
+	{
+		return;
+	}
+	bCancelWindowApplied = false;
+
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo(); IsValid(ASC))
+	{
+		ASC->RemoveLooseGameplayTag(ODGameplayTags::State_Cancelable);
+	}
+}
+
+void UODGameplayAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
+{
+	ClearCancelWindow();
+	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

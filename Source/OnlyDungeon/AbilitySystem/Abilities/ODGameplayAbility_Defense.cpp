@@ -49,6 +49,8 @@ void UODGameplayAbility_Defense::ActivateAbility(const FGameplayAbilitySpecHandl
 		OwnerCharacter->GetEquipmentComponent()->SetAbilityAttachment(true);
 	}
 
+	ListenForCancelWindow();
+
 	UAbilityTask_PlayMontageAndWait* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, DefenseMontage, 1.0f);
 	MontageTask->OnCompleted.AddDynamic(this, &ThisClass::OnMontageFinished);
 	MontageTask->OnBlendOut.AddDynamic(this, &ThisClass::OnMontageFinished);

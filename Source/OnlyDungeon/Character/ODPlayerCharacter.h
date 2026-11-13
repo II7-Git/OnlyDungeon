@@ -30,6 +30,9 @@ public:
 	USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
+	/** 이동이 막힌 동안(공격 중)에도 최근 0.2초 안에 누른 방향을 돌려준다. */
+	virtual FVector GetDesiredMoveDirection() const override;
+
 protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void NotifyControllerChanged() override;
@@ -64,6 +67,10 @@ protected:
 	/** 기본 입력 매핑 우선순위 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Input")
 	int32 DefaultMappingPriority = 0;
+
+	/** 최근 이동 입력 방향(월드)과 시각. 이동이 막힌 동안에도 기록한다. */
+	FVector BufferedMoveDirection = FVector::ZeroVector;
+	double BufferedMoveTime = -1.0;
 
 	/** [테스트] 무기 교체 키로 순환할 무기 목록 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Test")

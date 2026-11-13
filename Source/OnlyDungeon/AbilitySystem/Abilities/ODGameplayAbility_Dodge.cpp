@@ -70,6 +70,8 @@ void UODGameplayAbility_Dodge::ActivateAbility(const FGameplayAbilitySpecHandle 
 		return;
 	}
 
+	ListenForCancelWindow();
+
 	UAbilityTask_PlayMontageAndWait* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, Montage, MontagePlayRate);
 	MontageTask->OnCompleted.AddDynamic(this, &ThisClass::OnMontageFinished);
 	MontageTask->OnBlendOut.AddDynamic(this, &ThisClass::OnMontageFinished);

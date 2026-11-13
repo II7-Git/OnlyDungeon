@@ -124,17 +124,30 @@ void AODPlayerCharacter::Input_Move(const FInputActionValue& Value)
 		return;
 	}
 
-	// 공격·가드 중에는 이동 입력을 받지 않는다.
-	// 공격 모션은 제자리 모션(루트 이동 없음)이라 이동 입력을 받으면 미끄러져 보인다. 전진은 콤보 어빌리티의 StepDistance가 담당한다.
-	if (IsValid(AbilitySystemComponent)
-		&& (AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Defending) || AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Attacking)))
-	{
-		return;
-	}
-
 	const FVector2D Axis = Value.Get<FVector2D>();
 	const FRotator YawRotation(0.0f, MyController->GetControlRotation().Yaw, 0.0f);
 	const FRotationMatrix YawMatrix(YawRotation);
+
+	// 이동이 막혀도 방향은 기억한다. (캔슬 회피 방향 등)
+	const FVector WorldDirection = YawMatrix.GetUnitAxis(EAxis::X) * Axis.Y + YawMatrix.GetUnitAxis(EAxis::Y) * Axis.X;
+	if (!WorldDirection.IsNearlyZero())
+	{
+		BufferedMoveDirection = WorldDirection.GetSafeNormal2D();
+		BufferedMoveTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	}
+
+	// 공격·가드 중에는 이동 입력을 받지 않는다.
+	// 공격 모션은 제자리 모션(루트 이동 없음)이라 이동 입력을 받으면 미끄러져 보인다. 전진은 콤보 어빌리티의 StepDistance가 담당한다.
+	// 단, 캔슬 구간(후딜)에서는 행동을 끊고 바로 움직인다.
+	if (IsValid(AbilitySystemComponent)
+		&& (AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Defending) || AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Attacking)))
+	{
+		if (!AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Cancelable))
+		{
+			return;
+		}
+		AbilitySystemComponent->CancelActionAbilities();
+	}
 
 	AddMovementInput(YawMatrix.GetUnitAxis(EAxis::X), Axis.Y);
 	AddMovementInput(YawMatrix.GetUnitAxis(EAxis::Y), Axis.X);
@@ -205,4 +218,14 @@ void AODPlayerCharacter::Input_Debug_Reset()
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[테스트] 모든 캐릭터 상태 초기화"));
 	}
+}
+
+FVector AODPlayerCharacter::GetDesiredMoveDirection() const
+{
+	const UWorld* World = GetWorld();
+	if (World && BufferedMoveTime >= 0.0 && World->GetTimeSeconds() - BufferedMoveTime <= 0.2)
+	{
+		return BufferedMoveDirection;
+	}
+	return Super::GetDesiredMoveDirection();
 }

@@ -27,4 +27,7 @@ public:
 
 	/** 눌려 있는 모든 입력을 해제 처리한다. (모드 전환, 사망 시 사용) */
 	void ClearAbilityInput();
+
+	/** 진행 중인 행동 어빌리티(Ability.Action)를 모두 끊는다. 캔슬 구간 입력에서 사용 */
+	void CancelActionAbilities();
 };

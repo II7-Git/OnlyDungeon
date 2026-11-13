@@ -41,6 +41,9 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Character")
 	bool IsDead() const;
 
+	/** 조작자가 원하는 이동 방향(월드). 기본은 직전 이동 입력. 플레이어는 이동이 막힌 동안의 입력도 기억한다. */
+	virtual FVector GetDesiredMoveDirection() const { return GetLastMovementInputVector(); }
+
 	/** 현재 락온 대상. 락온 시스템 구현 전까지는 nullptr를 반환한다. */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Character")
 	virtual AActor* GetLockOnTarget() const { return nullptr; }

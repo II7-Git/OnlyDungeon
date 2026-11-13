@@ -43,6 +43,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Ability")
 	AODCharacterBase* GetODCharacterFromActorInfo() const;
 
+	/**
+	 * 실행 중에 같은 입력이 다시 들어오면 직접 처리하는지 (예: 콤보).
+	 * false면 캔슬 구간에서 같은 입력이 들어올 때 ASC가 끊고 새로 발동한다.
+	 */
+	virtual bool HandlesInputWhileActive() const { return false; }
+
 	/** 어빌리티를 소유한 OnlyDungeon ASC (없으면 nullptr) */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Ability")
 	UODAbilitySystemComponent* GetODAbilitySystemComponentFromActorInfo() const;
@@ -54,10 +60,28 @@ protected:
 	 */
 	FVector GetMovementInputDirection(float DeadZone = 0.1f) const;
 
+	/**
+	 * 몽타주의 캔슬 구간 노티파이(Event.Montage.CancelWindow)를 듣기 시작한다.
+	 * 구간 동안 State.Cancelable이 붙어, 회피·다른 행동·이동 입력이 이 어빌리티를 끊을 수 있다. (ASC·플레이어가 처리)
+	 * 행동 어빌리티의 ActivateAbility에서 몽타주 재생 전에 호출한다.
+	 */
+	void ListenForCancelWindow();
+
+	/** 캔슬 구간 태그를 즉시 제거 (구간을 벗어나는 섹션 이동 시 등) */
+	void ClearCancelWindow();
+
+	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
+
 	virtual void OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec) override;
 	virtual void InputReleased(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo) override;
 
 	/** 이 어빌리티가 언제 발동되는지 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Ability Activation")
 	EODAbilityActivationPolicy ActivationPolicy = EODAbilityActivationPolicy::OnInputTriggered;
+
+private:
+	UFUNCTION()
+	void OnCancelWindowEvent(FGameplayEventData Payload);
+
+	bool bCancelWindowApplied = false;
 };

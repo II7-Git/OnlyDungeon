@@ -65,6 +65,9 @@ class ONLYDUNGEON_API UODGameplayAbility_MeleeCombo : public UODGameplayAbility
 public:
 	UODGameplayAbility_MeleeCombo(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
+	/** 콤보는 실행 중 입력(다음 타격)을 직접 처리한다. */
+	virtual bool HandlesInputWhileActive() const override { return true; }
+
 protected:
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
