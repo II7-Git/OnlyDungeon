@@ -32,6 +32,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "OD|Equipment")
 	void UnequipWeapon();
 
+	/**
+	 * 공격·방어 어빌리티 실행 중 무기 부착 위치 전환.
+	 * true면 무기 데이터의 AbilityAttachSocket으로, false면 기본 AttachSocket으로 되돌린다. (AbilityAttachSocket이 없으면 아무것도 하지 않음)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "OD|Equipment")
+	void SetAbilityAttachment(bool bAbilityAttach);
+
 	/** DefaultWeapon 장착. 소유 캐릭터의 ASC가 준비된 뒤 호출한다. */
 	void EquipDefaultWeapon();
 

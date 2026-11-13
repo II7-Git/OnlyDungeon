@@ -4,6 +4,7 @@
 
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "Character/ODCharacterBase.h"
+#include "GameFramework/Character.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/ODLogChannels.h"
 #include "Engine/World.h"
@@ -71,6 +72,20 @@ void UODEquipmentComponent::EquipWeapon(UODWeaponData* NewWeaponData)
 
 	WeaponData = NewWeaponData;
 	UE_LOG(LogODCombat, Log, TEXT("%s 무기 장착: %s"), *GetNameSafe(Character), *GetNameSafe(NewWeaponData));
+}
+
+void UODEquipmentComponent::SetAbilityAttachment(bool bAbilityAttach)
+{
+	const ACharacter* Character = Cast<ACharacter>(GetOwner());
+	if (!IsValid(WeaponActor) || !IsValid(WeaponData) || !IsValid(Character) || WeaponData->AbilityAttachSocket.IsNone())
+	{
+		return;
+	}
+
+	const FName Socket = bAbilityAttach ? WeaponData->AbilityAttachSocket : WeaponData->AttachSocket;
+	const FTransform& Offset = bAbilityAttach ? WeaponData->AbilityAttachOffset : WeaponData->AttachOffset;
+	WeaponActor->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, Socket);
+	WeaponActor->SetActorRelativeTransform(Offset);
 }
 
 void UODEquipmentComponent::UnequipWeapon()

@@ -16,6 +16,9 @@
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
 #include "Equipment/ODEquipmentComponent.h"
+#include "Equipment/ODWeaponData.h"
+#include "EngineUtils.h"
+#include "Engine/Engine.h"
 #include "Input/ODInputConfig.h"
 
 AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializer)
@@ -43,18 +46,6 @@ AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
-
-	EquipmentComponent = CreateDefaultSubobject<UODEquipmentComponent>(TEXT("EquipmentComponent"));
-}
-
-void AODPlayerCharacter::InitializeAbilitySystem()
-{
-	Super::InitializeAbilitySystem();
-
-	if (IsValid(EquipmentComponent))
-	{
-		EquipmentComponent->EquipDefaultWeapon();
-	}
 }
 
 void AODPlayerCharacter::NotifyControllerChanged()
@@ -104,6 +95,16 @@ void AODPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 		EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ThisClass::Input_Look);
 	}
 
+	// [테스트] 무기 교체·상태 초기화 (액션이 설정에 없으면 연결하지 않음)
+	if (const UInputAction* SwapAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Debug_SwapWeapon, false))
+	{
+		EIC->BindAction(SwapAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_SwapWeapon);
+	}
+	if (const UInputAction* ResetAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Debug_Reset, false))
+	{
+		EIC->BindAction(ResetAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_Reset);
+	}
+
 	// 어빌리티: 누름/뗌을 InputTag와 함께 ASC로 전달
 	for (const FODInputAction& Action : InputConfig->AbilityInputActions)
 	{
@@ -119,6 +120,12 @@ void AODPlayerCharacter::Input_Move(const FInputActionValue& Value)
 {
 	const AController* MyController = GetController();
 	if (!MyController || IsDead())
+	{
+		return;
+	}
+
+	// 가드 중에는 제자리에서 막는다. (가드 모션이 하체까지 고정하므로 이동하면 미끄러져 보인다)
+	if (IsValid(AbilitySystemComponent) && AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Defending))
 	{
 		return;
 	}
@@ -156,5 +163,44 @@ void AODPlayerCharacter::Input_AbilityReleased(FGameplayTag InputTag)
 	if (IsValid(AbilitySystemComponent))
 	{
 		AbilitySystemComponent->AbilityInputTagReleased(InputTag);
+	}
+}
+
+void AODPlayerCharacter::Input_Debug_SwapWeapon()
+{
+	if (TestWeapons.IsEmpty() || !IsValid(EquipmentComponent) || IsDead())
+	{
+		return;
+	}
+
+	// 공격·방어 중이면 교체하지 않는다.
+	if (IsValid(AbilitySystemComponent) && (AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Attacking) || AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Defending)))
+	{
+		return;
+	}
+
+	const int32 CurrentIndex = TestWeapons.IndexOfByKey(EquipmentComponent->GetWeaponData());
+	const int32 NextIndex = (CurrentIndex + 1) % TestWeapons.Num();
+	EquipmentComponent->EquipWeapon(TestWeapons[NextIndex]);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, FString::Printf(TEXT("[테스트] 무기: %s"), *GetNameSafe(TestWeapons[NextIndex])));
+	}
+}
+
+void AODPlayerCharacter::Input_Debug_Reset()
+{
+	for (TActorIterator<AODCharacterBase> It(GetWorld()); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			It->ResetForTest();
+		}
+	}
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[테스트] 모든 캐릭터 상태 초기화"));
 	}
 }

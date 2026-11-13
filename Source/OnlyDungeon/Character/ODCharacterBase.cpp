@@ -3,11 +3,14 @@
 #include "ODCharacterBase.h"
 
 #include "Abilities/GameplayAbilityTypes.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Combat.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
+#include "Equipment/ODEquipmentComponent.h"
+#include "Equipment/ODWeaponData.h"
 
 AODCharacterBase::AODCharacterBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -20,6 +23,11 @@ AODCharacterBase::AODCharacterBase(const FObjectInitializer& ObjectInitializer)
 	// 액터의 하위 오브젝트로 만든 AttributeSet은 ASC 초기화 시 자동으로 등록된다.
 	HealthSet = CreateDefaultSubobject<UODAttributeSet_Health>(TEXT("HealthSet"));
 	CombatSet = CreateDefaultSubobject<UODAttributeSet_Combat>(TEXT("CombatSet"));
+
+	EquipmentComponent = CreateDefaultSubobject<UODEquipmentComponent>(TEXT("EquipmentComponent"));
+
+	// 무기 판정이 화면 밖에서도 정확하도록, 보이지 않아도 본 위치를 갱신한다.
+	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 }
 
 UAbilitySystemComponent* AODCharacterBase::GetAbilitySystemComponent() const
@@ -74,6 +82,46 @@ void AODCharacterBase::InitializeAbilitySystem()
 	{
 		UE_LOG(LogODAbility, Verbose, TEXT("%s: DefaultAbilitySet이 지정되지 않음"), *GetNameSafe(this));
 	}
+
+	// 무기 어빌리티 부여에 ASC가 필요하므로 초기화가 끝난 뒤 기본 무기를 장착한다.
+	if (IsValid(EquipmentComponent))
+	{
+		EquipmentComponent->EquipDefaultWeapon();
+	}
+}
+
+void AODCharacterBase::ResetForTest()
+{
+	if (!IsValid(AbilitySystemComponent))
+	{
+		return;
+	}
+
+	AbilitySystemComponent->CancelAllAbilities();
+	AbilitySystemComponent->ClearAbilityInput();
+	AbilitySystemComponent->SetLooseGameplayTagCount(ODGameplayTags::State_Dead, 0);
+
+	// 기본 세트를 회수 후 다시 부여: 초기 수치 GE가 다시 적용되고 패시브(스태미나 회복)도 다시 발동한다.
+	DefaultAbilitySetHandles.TakeFromAbilitySystem(AbilitySystemComponent);
+	if (IsValid(DefaultAbilitySet))
+	{
+		DefaultAbilitySet->GiveToAbilitySystem(AbilitySystemComponent, &DefaultAbilitySetHandles, this);
+	}
+
+	// 무기 어빌리티도 다시 부여
+	if (IsValid(EquipmentComponent))
+	{
+		if (UODWeaponData* Weapon = EquipmentComponent->GetWeaponData())
+		{
+			EquipmentComponent->EquipWeapon(Weapon);
+		}
+		else
+		{
+			EquipmentComponent->EquipDefaultWeapon();
+		}
+	}
+
+	UE_LOG(LogOD, Log, TEXT("%s 테스트 초기화"), *GetNameSafe(this));
 }
 
 void AODCharacterBase::HandleOutOfHealth(AActor* DamageInstigator)

@@ -43,6 +43,17 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Visual")
 	FTransform AttachOffset = FTransform::Identity;
 
+	/**
+	 * 공격·방어 어빌리티가 실행되는 동안 무기를 붙일 소켓(본). 비우면 바꾸지 않는다.
+	 * 원본 모션이 무기 본을 따로 움직이는 경우(예: Kwang 대검) 그 움직임을 구운 본(ik_hand_gun)을 지정한다.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Visual")
+	FName AbilityAttachSocket;
+
+	/** AbilityAttachSocket 기준 무기 위치·회전 보정 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Visual")
+	FTransform AbilityAttachOffset = FTransform::Identity;
+
 	/** 장착 시 부여할 어빌리티 세트 (공격·방어·스킬, 스탯 GE) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Ability")
 	TObjectPtr<UODAbilitySet> AbilitySet;

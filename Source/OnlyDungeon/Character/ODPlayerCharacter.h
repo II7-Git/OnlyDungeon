@@ -11,7 +11,7 @@ class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
 class UODInputConfig;
-class UODEquipmentComponent;
+class UODWeaponData;
 struct FInputActionValue;
 
 /**
@@ -30,14 +30,7 @@ public:
 	USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
-	/** 장비(무기) 관리 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Equipment")
-	UODEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
-
 protected:
-	/** ASC 초기화가 끝난 뒤 기본 무기를 장착한다. (무기 어빌리티 부여에 ASC가 필요) */
-	virtual void InitializeAbilitySystem() override;
-
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void NotifyControllerChanged() override;
 
@@ -46,6 +39,12 @@ protected:
 	void Input_AbilityPressed(FGameplayTag InputTag);
 	void Input_AbilityReleased(FGameplayTag InputTag);
 
+	/** [테스트] 무기 교체 (TestWeapons를 순서대로) */
+	void Input_Debug_SwapWeapon();
+
+	/** [테스트] 월드의 모든 OD 캐릭터 상태 초기화 */
+	void Input_Debug_Reset();
+
 	/** 카메라 붐 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;
@@ -53,10 +52,6 @@ protected:
 	/** 카메라 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
-
-	/** 장비(무기) 관리 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Equipment")
-	TObjectPtr<UODEquipmentComponent> EquipmentComponent;
 
 	/** 입력 액션 ↔ InputTag 매핑 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Input")
@@ -69,4 +64,8 @@ protected:
 	/** 기본 입력 매핑 우선순위 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Input")
 	int32 DefaultMappingPriority = 0;
+
+	/** [테스트] 무기 교체 키로 순환할 무기 목록 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Test")
+	TArray<TObjectPtr<UODWeaponData>> TestWeapons;
 };
