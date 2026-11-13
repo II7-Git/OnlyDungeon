@@ -78,8 +78,9 @@
 | `AbilitySystem/DA_AbilitySet_Weapon_OneHandSword` | `GA_Attack_Light`(좌클릭) |
 | `AbilitySystem/DA_AbilitySet_Enemy_Dummy` | `GE_Init_Enemy_Dummy` + `GA_HitReact` |
 | `Equipment/Weapons/DA_Weapon_OneHandSword` | Atris `SM_Sword1f`, `hand_r` + 보정(손가락 본 기준 계산), 판정 z -12 ~ -82. `BP_ODPlayer`의 기본 무기 |
-| `Characters/Enemies/BP_ODEnemy_Dummy` | 테스트용 허수아비 (Quinn 메시, 행동 없음) |
-| `Characters/BP_ODPlayer` | 플레이어 (Manny + `ABP_Unarmed`) |
+| `Characters/Enemies/BP_ODEnemy_Dummy` | 테스트용 허수아비 (Quinn 메시 + `ABP_OD_Humanoid`, 행동 없음) |
+| `Characters/BP_ODPlayer` | 플레이어 (Manny + `ABP_OD_Humanoid`) |
+| `Characters/Animation/ABP_OD_Humanoid` | `ABP_Unarmed` 복제본. **몽타주 재생 중에는 발 IK 컨트롤 릭(CR_Mannequin_FootIK) Alpha 0**(보간), IK 트레이스도 끔. 플레이어·허수아비 공용. 이후 무기별 Linked Anim Layer의 기반 |
 | `Core/BP_ODGameMode` | 기본 폰 `BP_ODPlayer`. 프로젝트 전역 GameMode |
 | `Maps/L_OD_Test_Combat` | **전투 테스트 맵 (게임·에디터 시작 맵).** 80m 평지, 허수아비 3개(정면 6m, 좌우 10m) |
 | `Maps/L_OD_Prototype` | 템플릿 레벨 복제본 (지형 테스트용) |
@@ -92,6 +93,7 @@
 
 ### 최근 검증 기록
 - **회피 (2026-11-13):** 입력 방향 회전 후 구르기 약 3m, 입력 없으면 뒤 구르기, 스태미나 20 소모, 0이면 발동 불가, 무적 약 0.08~0.48초.
+- **발 IK 수정 (2026-11-13):** 템플릿 ABP의 발 IK가 몽타주 위에 적용되어 구르기·공격 중 두 발이 바닥에 고정되던 문제. 수정 후 구르기·공격 중 발 높이가 원본 애니메이션과 일치(PIE 측정).
 - **무기 판정 (2026-11-13):** 허수아비 정면 콤보 시 A·B·C·D 모두 적중(피해 20·20·22·28 = 기본+공격력 10), 강인도 0에서 경직 → 경직 종료 후 강인도 40 회복.
 - **약공격 (2026-11-13):** 단타 A→A_Rec 후 종료, 연타 시 A→B→C→D→D_Rec, 타격마다 스태미나 10 소모.
 - **스태미나 회복 (2026-11-13):** 마지막 소모 1.51초 후 회복 시작, 초당 25 회복, 회복 중 소모 시 즉시 정지 후 1.5초 대기 재시작, 가득 차면 회복 GE 제거.
@@ -127,6 +129,8 @@
   - 몽타주 섹션은 Python으로 만들 수 없어 `unreal.ODMontageEditorLibrary.build_sectioned_montage(montage, sequences, section_names, next_section_names)`를 씁니다. 노티파이는 `unreal.AnimationLibrary.add_animation_notify_state_event`.
   - 새 레벨은 `LevelEditorSubsystem.new_level_from_template`을 단독 호출로 만들고, 액터 배치는 별도 호출로 합니다.
   - 애니메이션의 본 위치는 `unreal.AnimPoseExtensions.get_anim_pose_at_time` + `get_bone_pose`로 읽을 수 있습니다. 판정 구간은 손 속도가 높은 구간으로 잡았습니다.
+  - 애님 그래프 편집: `BlueprintToolsets.BlueprintToolset`의 FindNodes / GetNodeInfos / CreateNode / ConnectPins / SetPinValue가 AnimGraph에서도 동작합니다(Graph DSL은 AnimGraph 미지원). 노드 구조체 값은 `node.export_text()` → 수정 → `import_text`로 바꿀 수 있으나 핀 구성은 바뀌지 않습니다.
+  - 템플릿 ABP(`ABP_Unarmed`)는 수정하지 않고 `ABP_OD_Humanoid`를 씁니다.
   - Live Coding이 켜진 에디터가 살아 있으면 `ValidateBuild.bat`가 실패합니다("Unable to build while Live Coding is active"). 에디터가 완전히 종료된 뒤 실행해야 합니다.
   - PIE 입력 테스트: `InputToolset.ApplyInput`(액션 경로 지정), 상태 확인은 Python에서 ASC 태그·Attribute를 프레임 단위로 샘플링합니다.
 - **파일 규칙:** C++ 소스는 UTF-8 BOM + CRLF, 한글 주석.
