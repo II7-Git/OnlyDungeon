@@ -7,6 +7,26 @@
 #include "ODGameplayAbility_MeleeCombo.generated.h"
 
 class UAnimMontage;
+class UGameplayEffect;
+
+/** 콤보 한 타격의 정의 */
+USTRUCT(BlueprintType)
+struct FODComboStep
+{
+	GENERATED_BODY()
+
+	/** 이 타격의 몽타주 섹션 이름 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo")
+	FName Section;
+
+	/** 기본 피해 (피해 계산에서 공격력이 더해진다) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo", meta = (ClampMin = "0.0"))
+	float Damage = 10.0f;
+
+	/** 강인도 피해 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo", meta = (ClampMin = "0.0"))
+	float PoiseDamage = 10.0f;
+};
 
 /**
  * 몽타주 하나에 섹션으로 나뉜 콤보를 재생하는 근접 공격 어빌리티.
@@ -19,6 +39,8 @@ class UAnimMontage;
  * - 발동: 스태미나 비용 지불(CommitAbility) → 입력 방향으로 회전 → 첫 공격 섹션 재생
  * - 공격 중 다시 입력하면 예약해 두고, 콤보 입력 구간이 열려 있으면 즉시 다음 공격 섹션으로 넘어간다. (매 타격마다 비용 지불)
  * - 입력이 없으면 후딜 섹션까지 재생되고 종료된다. 스태미나가 부족하면 다음 타격으로 넘어가지 않는다.
+ * - 판정: 공격 섹션의 무기 판정 노티파이(UODAnimNotifyState_WeaponTrace)가 Event.Melee.Hit을 보내면
+ *   현재 타격의 피해·강인도 피해를 SetByCaller로 담아 DamageEffectClass를 대상에게 적용한다.
  * - 상태 태그(State.Attacking)와 차단 태그는 BP(GA_*)에서 지정한다.
  */
 UCLASS(Abstract)
@@ -38,9 +60,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo")
 	TObjectPtr<UAnimMontage> ComboMontage;
 
-	/** 공격 섹션 이름 (콤보 순서대로) */
+	/** 콤보 타격 목록 (순서대로) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo", meta = (TitleProperty = "Section"))
+	TArray<FODComboStep> ComboSteps;
+
+	/** 적중 시 대상에게 적용할 피해 GE (ODDamageExecution 사용) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo")
-	TArray<FName> ComboSections;
+	TSubclassOf<UGameplayEffect> DamageEffectClass;
 
 	/** 몽타주 재생 속도 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo", meta = (ClampMin = "0.1"))
@@ -59,6 +85,10 @@ private:
 
 	UFUNCTION()
 	void OnComboWindowEvent(FGameplayEventData Payload);
+
+	/** 무기가 대상을 맞혔을 때 */
+	UFUNCTION()
+	void OnMeleeHit(FGameplayEventData Payload);
 
 	UFUNCTION()
 	void OnMontageFinished();

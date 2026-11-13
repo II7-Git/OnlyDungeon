@@ -1,0 +1,69 @@
+﻿// OnlyDungeon 무기 데이터
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/DataAsset.h"
+#include "GameplayTagContainer.h"
+#include "ODWeaponData.generated.h"
+
+class AODWeaponActor;
+class UAnimInstance;
+class UODAbilitySet;
+class UStaticMesh;
+
+/**
+ * 무기 하나를 정의하는 데이터 에셋. 에셋 접두사: DA_Weapon_ (예: DA_Weapon_OneHandSword)
+ * 장착하면 메시를 손에 붙이고, 어빌리티 세트(공격·방어·스킬 + 스탯 GE)를 부여하고,
+ * 무기 타입 태그와 이동 애니메이션 레이어를 적용한다.
+ */
+UCLASS(BlueprintType, Const)
+class ONLYDUNGEON_API UODWeaponData : public UPrimaryDataAsset
+{
+	GENERATED_BODY()
+
+public:
+	/** 무기 타입 (Weapon.Type.*). 장착 중 ASC에 태그로 붙는다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon", meta = (Categories = "Weapon.Type"))
+	FGameplayTag WeaponType;
+
+	/** 스폰할 무기 액터 클래스 (비우면 AODWeaponActor) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon")
+	TSubclassOf<AODWeaponActor> WeaponActorClass;
+
+	/** 무기 메시 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Visual")
+	TObjectPtr<UStaticMesh> WeaponMesh;
+
+	/** 캐릭터 메시에서 무기를 붙일 소켓(또는 본) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Visual")
+	FName AttachSocket = TEXT("hand_r");
+
+	/** 소켓 기준 무기 위치·회전 보정 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Visual")
+	FTransform AttachOffset = FTransform::Identity;
+
+	/** 장착 시 부여할 어빌리티 세트 (공격·방어·스킬, 스탯 GE) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Ability")
+	TObjectPtr<UODAbilitySet> AbilitySet;
+
+	/** 장착 중 연결할 이동 애니메이션 레이어 (Linked Anim Layer). 비우면 기본 이동 유지 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Animation")
+	TSubclassOf<UAnimInstance> AnimLayerClass;
+
+	/** 판정 시작점 (무기 메시 로컬 좌표, 보통 칼날 시작) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace")
+	FVector TraceStart = FVector(0.0, 0.0, -15.0);
+
+	/** 판정 끝점 (무기 메시 로컬 좌표, 보통 칼끝) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace")
+	FVector TraceEnd = FVector(0.0, 0.0, -100.0);
+
+	/** 판정 구의 반지름 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace", meta = (ClampMin = "1.0"))
+	float TraceRadius = 8.0f;
+
+	/** 칼날을 따라 나눌 판정 지점 수 (2 이상) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace", meta = (ClampMin = "2", ClampMax = "16"))
+	int32 TraceSamples = 4;
+};

@@ -11,6 +11,7 @@ class USpringArmComponent;
 class UCameraComponent;
 class UInputMappingContext;
 class UODInputConfig;
+class UODEquipmentComponent;
 struct FInputActionValue;
 
 /**
@@ -29,7 +30,14 @@ public:
 	USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
+	/** 장비(무기) 관리 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Equipment")
+	UODEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
+
 protected:
+	/** ASC 초기화가 끝난 뒤 기본 무기를 장착한다. (무기 어빌리티 부여에 ASC가 필요) */
+	virtual void InitializeAbilitySystem() override;
+
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void NotifyControllerChanged() override;
 
@@ -45,6 +53,10 @@ protected:
 	/** 카메라 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
+
+	/** 장비(무기) 관리 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Equipment")
+	TObjectPtr<UODEquipmentComponent> EquipmentComponent;
 
 	/** 입력 액션 ↔ InputTag 매핑 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Input")

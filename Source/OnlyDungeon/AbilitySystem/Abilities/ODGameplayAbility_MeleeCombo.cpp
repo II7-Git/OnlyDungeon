@@ -2,12 +2,15 @@
 
 #include "ODGameplayAbility_MeleeCombo.h"
 
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "Animation/AnimMontage.h"
 #include "Character/ODCharacterBase.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
+#include "GameplayEffect.h"
 
 UODGameplayAbility_MeleeCombo::UODGameplayAbility_MeleeCombo(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -17,7 +20,7 @@ UODGameplayAbility_MeleeCombo::UODGameplayAbility_MeleeCombo(const FObjectInitia
 
 void UODGameplayAbility_MeleeCombo::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
-	if (!IsValid(ComboMontage) || ComboSections.IsEmpty())
+	if (!IsValid(ComboMontage) || ComboSteps.IsEmpty())
 	{
 		UE_LOG(LogODAbility, Warning, TEXT("[%s] 콤보 몽타주 또는 섹션이 지정되지 않았습니다."), *GetName());
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
@@ -44,14 +47,18 @@ void UODGameplayAbility_MeleeCombo::ActivateAbility(const FGameplayAbilitySpecHa
 	WindowTask->EventReceived.AddDynamic(this, &ThisClass::OnComboWindowEvent);
 	WindowTask->ReadyForActivation();
 
-	UAbilityTask_PlayMontageAndWait* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, ComboMontage, MontagePlayRate, ComboSections[0]);
+	UAbilityTask_WaitGameplayEvent* HitTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ODGameplayTags::Event_Melee_Hit, nullptr, false, true);
+	HitTask->EventReceived.AddDynamic(this, &ThisClass::OnMeleeHit);
+	HitTask->ReadyForActivation();
+
+	UAbilityTask_PlayMontageAndWait* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, ComboMontage, MontagePlayRate, ComboSteps[0].Section);
 	MontageTask->OnCompleted.AddDynamic(this, &ThisClass::OnMontageFinished);
 	MontageTask->OnBlendOut.AddDynamic(this, &ThisClass::OnMontageFinished);
 	MontageTask->OnInterrupted.AddDynamic(this, &ThisClass::OnMontageCancelled);
 	MontageTask->OnCancelled.AddDynamic(this, &ThisClass::OnMontageCancelled);
 	MontageTask->ReadyForActivation();
 
-	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 콤보 시작: %s"), *GetName(), *ComboSections[0].ToString());
+	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 콤보 시작: %s"), *GetName(), *ComboSteps[0].Section.ToString());
 }
 
 void UODGameplayAbility_MeleeCombo::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
@@ -99,12 +106,45 @@ void UODGameplayAbility_MeleeCombo::OnComboWindowEvent(FGameplayEventData Payloa
 	}
 }
 
+void UODGameplayAbility_MeleeCombo::OnMeleeHit(FGameplayEventData Payload)
+{
+	if (!DamageEffectClass || !ComboSteps.IsValidIndex(ComboIndex))
+	{
+		return;
+	}
+
+	const AActor* TargetActor = Payload.Target.Get();
+	UAbilitySystemComponent* TargetASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(TargetActor);
+	UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
+	if (!IsValid(TargetASC) || !IsValid(SourceASC) || TargetASC->HasMatchingGameplayTag(ODGameplayTags::State_Dead))
+	{
+		return;
+	}
+
+	const FODComboStep& Step = ComboSteps[ComboIndex];
+	FGameplayEffectSpecHandle SpecHandle = MakeOutgoingGameplayEffectSpec(DamageEffectClass, GetAbilityLevel());
+	if (!SpecHandle.IsValid())
+	{
+		return;
+	}
+
+	SpecHandle.Data->SetSetByCallerMagnitude(ODGameplayTags::Data_Damage, Step.Damage);
+	SpecHandle.Data->SetSetByCallerMagnitude(ODGameplayTags::Data_PoiseDamage, Step.PoiseDamage);
+	if (const FHitResult* Hit = Payload.TargetData.Get(0) ? Payload.TargetData.Get(0)->GetHitResult() : nullptr)
+	{
+		SpecHandle.Data->GetContext().AddHitResult(*Hit, true);
+	}
+
+	SourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data, TargetASC);
+	UE_LOG(LogODCombat, Verbose, TEXT("[%s] %s 적중: %s (피해 %.0f, 강인도 %.0f)"), *GetName(), *Step.Section.ToString(), *GetNameSafe(TargetActor), Step.Damage, Step.PoiseDamage);
+}
+
 void UODGameplayAbility_MeleeCombo::TryAdvanceCombo()
 {
 	bComboQueued = false;
 
 	const int32 NextIndex = ComboIndex + 1;
-	if (!ComboSections.IsValidIndex(NextIndex))
+	if (!ComboSteps.IsValidIndex(NextIndex))
 	{
 		return;
 	}
@@ -124,8 +164,8 @@ void UODGameplayAbility_MeleeCombo::TryAdvanceCombo()
 		RotateToInputDirection();
 	}
 
-	MontageJumpToSection(ComboSections[ComboIndex]);
-	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 콤보 진행: %s"), *GetName(), *ComboSections[ComboIndex].ToString());
+	MontageJumpToSection(ComboSteps[ComboIndex].Section);
+	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 콤보 진행: %s"), *GetName(), *ComboSteps[ComboIndex].Section.ToString());
 }
 
 void UODGameplayAbility_MeleeCombo::RotateToInputDirection() const

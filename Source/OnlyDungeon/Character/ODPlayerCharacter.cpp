@@ -15,6 +15,7 @@
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
+#include "Equipment/ODEquipmentComponent.h"
 #include "Input/ODInputConfig.h"
 
 AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializer)
@@ -42,6 +43,18 @@ AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
+
+	EquipmentComponent = CreateDefaultSubobject<UODEquipmentComponent>(TEXT("EquipmentComponent"));
+}
+
+void AODPlayerCharacter::InitializeAbilitySystem()
+{
+	Super::InitializeAbilitySystem();
+
+	if (IsValid(EquipmentComponent))
+	{
+		EquipmentComponent->EquipDefaultWeapon();
+	}
 }
 
 void AODPlayerCharacter::NotifyControllerChanged()
