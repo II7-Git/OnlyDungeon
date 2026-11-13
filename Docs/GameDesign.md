@@ -51,6 +51,19 @@
 | 잡몹 밀도 | 한 화면 20마리 내외 | - |
 
 - 입력 매핑(IMC)은 모드별로 2세트를 두고, 컷신이 끝날 때 교체합니다.
+- **기본 키 배치** (InputTag 방식이라 키 커스텀으로 변경 가능)
+
+| 행동 | 키 | InputTag |
+|---|---|---|
+| 이동 / 시점 | WASD / 마우스 | `InputTag.Move` / `InputTag.Look` |
+| 약공격 | 좌클릭 | `InputTag.Attack.Light` |
+| 강공격 | 우클릭 | `InputTag.Attack.Heavy` |
+| 방어 (패링·가드) | Left Shift | `InputTag.Defense` |
+| 회피 | Space | `InputTag.Dodge` |
+| 스킬 1 / 스킬 2 | Q / E | `InputTag.Skill.1` / `.2` |
+| 락온 | 마우스 휠 클릭 | `InputTag.LockOn` |
+| 회복 | R | `InputTag.UseItem` |
+
 - 어빌리티는 키가 아니라 InputTag에 연결합니다.
 - 모드가 바뀔 때 함께 바뀌는 것: 카메라, 입력 매핑, 캐릭터 회전 방식, 락온, HUD.
 - 콤보는 쓸 만한 콤보 애니메이션이 있을 때만 구현합니다.
@@ -115,7 +128,28 @@
 | `AODEnemyCharacter` | `Character/` | 잡몹·보스 공통 기반 |
 | `UODInputConfig` | `Input/` | 입력 액션 ↔ InputTag 매핑 |
 
-### 6-2. 기본 방향
+### 6-2. 기본 에셋 (2026-11-13 생성)
+| 에셋 | 경로 | 내용 |
+|---|---|---|
+| 입력 액션 10개 | `/Game/OnlyDungeon/Input/Actions/` | `IA_Move`, `IA_Look`(템플릿 복제), 버튼 액션 8개 |
+| `IMC_Boss` | `/Game/OnlyDungeon/Input/` | 보스전(3인칭) 키 매핑. 필드용 `IMC_Field`는 모드 전환 단계에서 |
+| `DA_InputConfig_Player` | `/Game/OnlyDungeon/Input/` | 입력 액션 ↔ InputTag |
+| `GE_Init_Player` | `/Game/OnlyDungeon/AbilitySystem/Effects/` | 초기 수치: 체력 100, 강인도 50, 스태미나 100(회복 25/초), 공격력 10, 방어력 0, 무게 0 (초안) |
+| `DA_AbilitySet_Player` | `/Game/OnlyDungeon/AbilitySystem/` | `GE_Init_Player` + `GA_Dodge`(`InputTag.Dodge`) + `GA_StaminaRegen`(패시브) |
+| `BP_ODPlayer` | `/Game/OnlyDungeon/Characters/` | `AODPlayerCharacter` 기반, Manny 메시 + `ABP_Unarmed` |
+| `BP_ODGameMode` | `/Game/OnlyDungeon/Core/` | 기본 폰 `BP_ODPlayer`, 엔진 기본 PlayerController. 프로젝트 전역 GameMode |
+| `L_OD_Prototype` | `/Game/OnlyDungeon/Maps/` | 템플릿 레벨 복제본. 게임·에디터 시작 맵 |
+| `GA_Dodge` | `/Game/OnlyDungeon/AbilitySystem/Abilities/` | `UODGameplayAbility_Dodge` 기반. 상태 `State.Dodging`, 차단 Dead/Stunned/Dodging |
+| `GE_Cost_Dodge` | `/Game/OnlyDungeon/AbilitySystem/Effects/` | 스태미나 -20 (초안) |
+| `GA_StaminaRegen` | `/Game/OnlyDungeon/AbilitySystem/Abilities/` | `UODGameplayAbility_StaminaRegen` 기반 패시브 |
+| `GE_Regen_Stamina` | `/Game/OnlyDungeon/AbilitySystem/Effects/` | 무한 지속, 0.1초마다 `StaminaRegenRate × 0.1` 회복 |
+| `AM_Roll_*` 8개 | `/Game/OnlyDungeon/Animation/Common/Montages/` | `CM_Roll_*` 기반 몽타주, `DefaultSlot`, 루트 모션 |
+
+**회피 구현 (2026-11-13, PIE 검증):** 비락온은 입력 방향으로 즉시 회전 후 정면 구르기, 입력이 없으면 뒤로 구르기. 락온 중에는 대상을 바라보고 8방향 구르기(락온 시스템 구현 후 동작). 무적은 시작 0.05초부터 0.4초간 `State.Invulnerable`이며, 이 태그가 있으면 피해 계산이 피해·강인도 피해를 무시합니다. 스태미나가 부족하면 발동하지 않습니다.
+
+**스태미나 자연 회복:** 스태미나를 소모하는 행동이 없는 상태로 1.5초가 지나면 회복을 시작합니다(초당 `StaminaRegenRate`, 현재 25). 회복 중 소모가 생기면 즉시 멈추고 다시 1.5초를 기다립니다. 가득 차면 회복 GE를 제거합니다.
+
+### 6-3. 기본 방향
 
 - **Attribute:** 체력, 스태미나, 강인도, 공격력, 방어력, 무게
 - **공유 어빌리티:** 회피, 약공격(=평타), 스킬 1·2
@@ -173,7 +207,8 @@
 
 ## 9. 다음 단계
 
-1. 전투 모션 확정 → UE5 Manny 리타겟
-2. GAS 기본 뼈대 구조안 승인 (ASC 위치, 기반 클래스, AttributeSet, InputTag)
-3. 전투 모드 관리 컴포넌트 구조안 승인
-4. 프로토타입: 필드 1구간 + Stone Golem 보스전 + 모드 전환 컷신
+1. ~~전투 모션 확정 → UE5 Manny 리타겟~~ (완료)
+2. ~~GAS 기본 뼈대 구조안 승인~~ (완료) / ~~회피 어빌리티~~ (완료)
+3. ~~스태미나 자연 회복~~ (완료) / 약공격·강공격, 방어(패링·가드), 락온
+4. 전투 모드 관리 컴포넌트 구조안 승인
+5. 프로토타입: 필드 1구간 + Stone Golem 보스전 + 모드 전환 컷신
