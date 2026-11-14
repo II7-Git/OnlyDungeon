@@ -23,6 +23,10 @@ class ONLYDUNGEON_API UODWeaponData : public UPrimaryDataAsset
 	GENERATED_BODY()
 
 public:
+	/** 화면에 표시할 무기 이름 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon")
+	FText DisplayName;
+
 	/** 무기 타입 (Weapon.Type.*). 장착 중 ASC에 태그로 붙는다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon", meta = (Categories = "Weapon.Type"))
 	FGameplayTag WeaponType;

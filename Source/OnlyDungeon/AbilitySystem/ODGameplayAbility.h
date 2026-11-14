@@ -39,6 +39,9 @@ public:
 	/** 이 어빌리티의 발동 방식 */
 	EODAbilityActivationPolicy GetActivationPolicy() const { return ActivationPolicy; }
 
+	/** 지금 발동을 막고 있는 태그 (ActivationBlockedTags 중 보유 중인 것). 발동 실패 원인 표시용 */
+	FGameplayTagContainer GetCurrentBlockingTags(const UAbilitySystemComponent& ASC) const;
+
 	/** 어빌리티를 소유한 OnlyDungeon 캐릭터 (없으면 nullptr) */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Ability")
 	AODCharacterBase* GetODCharacterFromActorInfo() const;

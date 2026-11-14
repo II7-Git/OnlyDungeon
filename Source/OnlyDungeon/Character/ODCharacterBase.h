@@ -52,6 +52,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Equipment")
 	UODEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
+	/** 화면에 표시할 이름 (비어 있으면 클래스 이름) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Character")
+	FText GetDisplayName() const;
+
 	/**
 	 * [테스트용] 상태 초기화: 사망 해제, 기본 어빌리티 세트 재부여(초기 수치 GE 포함), 현재 무기 재장착.
 	 * 테스트 맵의 초기화 키에서 사용한다. 실제 부활 처리는 이후 단계에서 별도로 만든다.
@@ -91,6 +95,10 @@ protected:
 	/** 장비(무기) 관리. ASC 초기화가 끝난 뒤 기본 무기를 장착한다. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Equipment")
 	TObjectPtr<UODEquipmentComponent> EquipmentComponent;
+
+	/** 화면에 표시할 이름 (HUD의 대상 체력 바 등) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Character")
+	FText DisplayName;
 
 	/** 시작할 때 부여할 기본 어빌리티·이펙트 세트 (초기 수치 GE 포함) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Ability")

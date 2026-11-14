@@ -232,6 +232,10 @@ void UODGameplayAbility_MeleeCombo::TryAdvanceCombo()
 	if (!CommitAbilityCost(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo))
 	{
 		UE_LOG(LogODAbility, Verbose, TEXT("[%s] 스태미나 부족으로 콤보 중단"), *GetName());
+		if (UODAbilitySystemComponent* ODASC = Cast<UODAbilitySystemComponent>(GetAbilitySystemComponentFromActorInfo()))
+		{
+			ODASC->ReportActivationFailure(this, TEXT("스태미나 부족 (다음 타격)"));
+		}
 		return;
 	}
 

@@ -35,6 +35,17 @@ UAbilitySystemComponent* AODCharacterBase::GetAbilitySystemComponent() const
 	return AbilitySystemComponent;
 }
 
+FText AODCharacterBase::GetDisplayName() const
+{
+	if (!DisplayName.IsEmpty())
+	{
+		return DisplayName;
+	}
+	FString ClassName = GetClass()->GetName();
+	ClassName.RemoveFromEnd(TEXT("_C"));
+	return FText::FromString(ClassName);
+}
+
 bool AODCharacterBase::IsDead() const
 {
 	return IsValid(AbilitySystemComponent) && AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Dead);

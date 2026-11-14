@@ -9,6 +9,13 @@
 #include "AbilitySystemComponent.h"
 #include "Core/ODGameplayTags.h"
 
+FGameplayTagContainer UODGameplayAbility::GetCurrentBlockingTags(const UAbilitySystemComponent& ASC) const
+{
+	FGameplayTagContainer OwnedTags;
+	ASC.GetOwnedGameplayTags(OwnedTags);
+	return ActivationBlockedTags.Filter(OwnedTags);
+}
+
 UODGameplayAbility::UODGameplayAbility(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {

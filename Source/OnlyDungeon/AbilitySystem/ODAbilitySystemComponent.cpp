@@ -90,7 +90,7 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 	{
 		if (!TryActivateAbility(Handle))
 		{
-			// 실패 원인 기록 (log LogODAbility Verbose 로 확인)
+			// 실패 원인 기록 (log LogODAbility Verbose 로 확인) + HUD 알림
 			if (const FGameplayAbilitySpec* Spec = FindAbilitySpecFromHandle(Handle); Spec && Spec->Ability)
 			{
 				FGameplayTagContainer FailureTags;
@@ -100,6 +100,23 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 				GetOwnedGameplayTags(OwnedTags);
 				UE_LOG(LogODAbility, Verbose, TEXT("입력 %s: %s 발동 실패 (CanActivate %d, 비용 %d, 실패 태그 [%s], 보유 태그 [%s], 차단된 어빌리티 태그 [%s])"),
 					*InputTag.ToString(), *GetNameSafe(Spec->Ability), bCanActivate, bCostOk, *FailureTags.ToStringSimple(), *OwnedTags.ToStringSimple(), *BlockedAbilityTags.GetExplicitGameplayTags().ToStringSimple());
+
+				FString Reason;
+				const UODGameplayAbility* ODAbility = Cast<UODGameplayAbility>(Spec->Ability);
+				const FGameplayTagContainer BlockingTags = ODAbility ? ODAbility->GetCurrentBlockingTags(*this) : FGameplayTagContainer();
+				if (!BlockingTags.IsEmpty())
+				{
+					Reason = FString::Printf(TEXT("막힘: %s"), *BlockingTags.ToStringSimple());
+				}
+				else if (!bCostOk)
+				{
+					Reason = TEXT("스태미나 부족");
+				}
+				else
+				{
+					Reason = TEXT("발동 조건 불충족");
+				}
+				ReportActivationFailure(Spec->Ability, Reason);
 			}
 		}
 	}
@@ -181,6 +198,11 @@ void UODAbilitySystemComponent::ClearAbilityInput()
 			AbilitySpecInputReleased(Spec);
 		}
 	}
+}
+
+void UODAbilitySystemComponent::ReportActivationFailure(const UGameplayAbility* Ability, const FString& Reason)
+{
+	OnAbilityActivationFailed.Broadcast(Ability, Reason);
 }
 
 void UODAbilitySystemComponent::CancelActionAbilities()
