@@ -16,7 +16,10 @@ public class OnlyDungeonEditor : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"UnrealEd",
-			"OnlyDungeon"
+			"OnlyDungeon",
+			"LevelSequence",
+			"MovieScene",
+			"MovieSceneTracks"
 		});
 	}
 }
