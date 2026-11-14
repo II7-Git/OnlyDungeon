@@ -32,6 +32,8 @@
 #include "AbilitySystem/Attributes/ODAttributeSet_Combat.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "Character/ODCharacterBase.h"
+#include "Character/ODCombatModeComponent.h"
+#include "Interaction/ODInteractionComponent.h"
 #include "Core/ODGameplayTags.h"
 #include "Equipment/ODEquipmentComponent.h"
 #include "Equipment/ODWeaponData.h"
@@ -288,6 +290,24 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 		Panel->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
+	// ---- 아래 가운데: 상호작용 안내 ----
+	{
+		UBorder* Prompt = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("InteractionPrompt"));
+		InteractionPrompt = Prompt;
+		Prompt->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.6f));
+		Prompt->SetPadding(FMargin(18.0f, 8.0f));
+		if (UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(Prompt))
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.5f, 1.0f));
+			CanvasSlot->SetAlignment(FVector2D(0.5, 1.0));
+			CanvasSlot->SetPosition(FVector2D(0.0, -200.0));
+			CanvasSlot->SetAutoSize(true);
+		}
+		InteractionText = MakeText(Tree, 14, TextColor, TEXT("InteractionText"));
+		Prompt->SetContent(InteractionText);
+		Prompt->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	// ---- 오른쪽 위: 테스트 정보 ----
 	{
 		UBorder* Panel = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DebugPanel"));
@@ -340,6 +360,7 @@ void UODHUDWidget::NativeDestruct()
 	}
 	ClearTarget();
 	UnbindFromASC();
+	UnbindPawnComponents();
 
 	Super::NativeDestruct();
 }
@@ -352,6 +373,7 @@ void UODHUDWidget::SetObservedPawn(APawn* NewPawn)
 	}
 
 	UnbindFromASC();
+	UnbindPawnComponents();
 	ClearTarget();
 	ObservedPawn = NewPawn;
 	LastWeaponData.Reset();
@@ -361,8 +383,60 @@ void UODHUDWidget::SetObservedPawn(APawn* NewPawn)
 	if (IsValid(NewPawn))
 	{
 		BindToASC(UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(NewPawn));
+		BindPawnComponents(NewPawn);
 	}
 	RefreshDebugInfo();
+}
+
+void UODHUDWidget::BindPawnComponents(APawn* Pawn)
+{
+	if (UODCombatModeComponent* ModeComponent = Pawn->FindComponentByClass<UODCombatModeComponent>())
+	{
+		ObservedModeComponent = ModeComponent;
+		ModeComponent->OnCinematicChanged.AddUniqueDynamic(this, &ThisClass::HandleCinematicChanged);
+		HandleCinematicChanged(ModeComponent->IsInCinematic());
+	}
+	if (UODInteractionComponent* Interaction = Pawn->FindComponentByClass<UODInteractionComponent>())
+	{
+		ObservedInteraction = Interaction;
+		Interaction->OnFocusChanged.AddUniqueDynamic(this, &ThisClass::HandleInteractionFocusChanged);
+		HandleInteractionFocusChanged(Interaction->GetFocusedActor());
+	}
+}
+
+void UODHUDWidget::UnbindPawnComponents()
+{
+	if (UODCombatModeComponent* ModeComponent = ObservedModeComponent.Get())
+	{
+		ModeComponent->OnCinematicChanged.RemoveDynamic(this, &ThisClass::HandleCinematicChanged);
+	}
+	if (UODInteractionComponent* Interaction = ObservedInteraction.Get())
+	{
+		Interaction->OnFocusChanged.RemoveDynamic(this, &ThisClass::HandleInteractionFocusChanged);
+	}
+	ObservedModeComponent.Reset();
+	ObservedInteraction.Reset();
+}
+
+void UODHUDWidget::HandleCinematicChanged(bool bInCinematic)
+{
+	// 다크소울처럼 컷신 중에는 HUD를 모두 숨긴다.
+	SetVisibility(bInCinematic ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+}
+
+void UODHUDWidget::HandleInteractionFocusChanged(AActor* NewFocus)
+{
+	const UODInteractionComponent* Interaction = ObservedInteraction.Get();
+	const FText Label = (IsValid(NewFocus) && Interaction) ? Interaction->GetFocusedInteractionText() : FText::GetEmpty();
+
+	if (IsValid(InteractionText))
+	{
+		InteractionText->SetText(FText::Format(NSLOCTEXT("OnlyDungeon", "InteractionPromptFormat", "{0}    {1}"), InteractionKeyLabel, Label));
+	}
+	if (IsValid(InteractionPrompt))
+	{
+		InteractionPrompt->SetVisibility(Label.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	}
 }
 
 void UODHUDWidget::BindToASC(UAbilitySystemComponent* ASC)
@@ -691,7 +765,15 @@ void UODHUDWidget::RefreshDebugInfo()
 
 	const UAbilitySystemComponent* ASC = ObservedASC.Get();
 	TArray<FString> Lines;
-	Lines.Reserve(4);
+	Lines.Reserve(5);
+
+	// 전투 모드
+	if (const UODCombatModeComponent* ModeComponent = ObservedModeComponent.Get())
+	{
+		Lines.Emplace(FString::Printf(TEXT("모드: %s%s"),
+			ModeComponent->GetCombatMode() == EODCombatMode::Field ? TEXT("필드(쿼터뷰)") : TEXT("보스(3인칭)"),
+			ModeComponent->IsInCinematic() ? TEXT(" · 컷신") : TEXT("")));
+	}
 
 	// 상태 태그
 	TArray<FString> States;

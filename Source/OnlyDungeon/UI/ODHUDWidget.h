@@ -10,6 +10,8 @@
 class APawn;
 class UAbilitySystemComponent;
 class UCanvasPanel;
+class UODCombatModeComponent;
+class UODInteractionComponent;
 class UGameplayAbility;
 class UProgressBar;
 class USizeBox;
@@ -32,6 +34,8 @@ struct FODHUDBarState
  * - 왼쪽 위: 체력(빨강)·스태미나(초록) 바. 길이는 최대치에 비례하고, 체력은 깎인 부분이 잠시 남았다가 줄어든다.
  * - 왼쪽 아래: 장비 십자 슬롯 (오른손 = 현재 무기)
  * - 아래 가운데: 대상 체력 바 (마지막으로 때린 적, 일정 시간 뒤 숨김)
+ * - 아래 가운데(대상 바 위): 상호작용 안내 ("F  보스방 입장")
+ * - 컷신 중에는 HUD 전체를 숨긴다. (전투 모드 컴포넌트의 OnCinematicChanged)
  * - 오른쪽 위: 테스트 정보 (상태 태그, 몽타주·섹션, 강인도, 최근 발동 실패 원인). 콘솔 OD.Debug.HUD 0/1
  *
  * WBP(WBP_OD_HUD)가 이 클래스를 부모로 쓴다. 디자이너에 같은 이름의 위젯을 배치하면 그것을 쓰고,
@@ -89,6 +93,16 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UProgressBar> TargetLag;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> InteractionPrompt;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> InteractionText;
+
+	/** 상호작용 키 표시 (키 설정 화면이 생기면 입력 매핑에서 가져온다) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|HUD|Interaction")
+	FText InteractionKeyLabel = FText::FromString(TEXT("F"));
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> DebugPanel;
@@ -161,9 +175,20 @@ private:
 	void StartLagTimer();
 
 	void HandleActivationFailed(const UGameplayAbility* Ability, const FString& Reason);
+
+	UFUNCTION()
+	void HandleCinematicChanged(bool bInCinematic);
+
+	UFUNCTION()
+	void HandleInteractionFocusChanged(AActor* NewFocus);
+
+	void BindPawnComponents(APawn* Pawn);
+	void UnbindPawnComponents();
 	void HandleMeleeHit(const FGameplayEventData* Payload);
 
 	TWeakObjectPtr<APawn> ObservedPawn;
+	TWeakObjectPtr<UODCombatModeComponent> ObservedModeComponent;
+	TWeakObjectPtr<UODInteractionComponent> ObservedInteraction;
 	TWeakObjectPtr<UAbilitySystemComponent> ObservedASC;
 	TArray<TPair<FGameplayAttribute, FDelegateHandle>> PlayerAttributeHandles;
 	FDelegateHandle FailureHandle;

@@ -20,6 +20,9 @@
 #include "EngineUtils.h"
 #include "Engine/Engine.h"
 #include "Input/ODInputConfig.h"
+#include "Character/ODCombatModeComponent.h"
+#include "Interaction/ODInteractionComponent.h"
+#include "World/ODBossEntrance.h"
 
 AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -46,15 +49,28 @@ AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false;
+
+	CombatModeComponent = CreateDefaultSubobject<UODCombatModeComponent>(TEXT("CombatMode"));
+	InteractionComponent = CreateDefaultSubobject<UODInteractionComponent>(TEXT("Interaction"));
 }
 
 void AODPlayerCharacter::NotifyControllerChanged()
 {
 	Super::NotifyControllerChanged();
 
-	// 기본 입력 매핑 등록. 템플릿 PlayerController가 이미 등록한 매핑과 중복되어도 안전하다.
+	// 모드별 입력 매핑·카메라는 전투 모드 컴포넌트가 다시 맞춘다. (BeginPlay 시점에는 아직 컨트롤러가 없을 수 있음)
+	if (IsValid(CombatModeComponent))
+	{
+		CombatModeComponent->ReapplyCurrentMode();
+	}
+
+	// 모드별 매핑이 없으면 기본 입력 매핑을 등록한다.
 	const APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC || !IsValid(DefaultMappingContext))
+	{
+		return;
+	}
+	if (IsValid(CombatModeComponent) && IsValid(CombatModeComponent->GetSettings(CombatModeComponent->GetCombatMode()).InputMapping))
 	{
 		return;
 	}
@@ -105,6 +121,12 @@ void AODPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 		EIC->BindAction(ResetAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_Reset);
 	}
 
+	// 상호작용 (문 등)
+	if (const UInputAction* InteractAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Interact, false))
+	{
+		EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &ThisClass::Input_Interact);
+	}
+
 	// 어빌리티: 누름/뗌을 InputTag와 함께 ASC로 전달
 	for (const FODInputAction& Action : InputConfig->AbilityInputActions)
 	{
@@ -125,7 +147,8 @@ void AODPlayerCharacter::Input_Move(const FInputActionValue& Value)
 	}
 
 	const FVector2D Axis = Value.Get<FVector2D>();
-	const FRotator YawRotation(0.0f, MyController->GetControlRotation().Yaw, 0.0f);
+	// 쿼터뷰는 고정 카메라 방향, 3인칭은 컨트롤 방향 기준으로 움직인다.
+	const FRotator YawRotation = IsValid(CombatModeComponent) ? CombatModeComponent->GetMovementBasisRotation() : FRotator(0.0f, MyController->GetControlRotation().Yaw, 0.0f);
 	const FRotationMatrix YawMatrix(YawRotation);
 
 	// 이동이 막혀도 방향은 기억한다. (캔슬 회피 방향 등)
@@ -156,6 +179,12 @@ void AODPlayerCharacter::Input_Look(const FInputActionValue& Value)
 		return;
 	}
 
+	// 쿼터뷰(고정 카메라)와 컷신 중에는 시점을 돌리지 않는다.
+	if (IsValid(CombatModeComponent) && !CombatModeComponent->AllowsLookInput())
+	{
+		return;
+	}
+
 	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
@@ -174,6 +203,14 @@ void AODPlayerCharacter::Input_AbilityReleased(FGameplayTag InputTag)
 	if (IsValid(AbilitySystemComponent))
 	{
 		AbilitySystemComponent->AbilityInputTagReleased(InputTag);
+	}
+}
+
+void AODPlayerCharacter::Input_Interact()
+{
+	if (IsValid(InteractionComponent) && !IsDead())
+	{
+		InteractionComponent->TryInteract();
 	}
 }
 
@@ -203,6 +240,15 @@ void AODPlayerCharacter::Input_Debug_SwapWeapon()
 void AODPlayerCharacter::Input_Debug_Reset()
 {
 	for (TActorIterator<AODCharacterBase> It(GetWorld()); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			It->ResetForTest();
+		}
+	}
+
+	// 보스방 입구도 처음 상태로 (들어간 플레이어는 문 앞으로 돌아가고 필드 모드가 된다)
+	for (TActorIterator<AODBossEntrance> It(GetWorld()); It; ++It)
 	{
 		if (IsValid(*It))
 		{
