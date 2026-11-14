@@ -9,6 +9,7 @@
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
 #include "DrawDebugHelpers.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "Equipment/ODWeaponData.h"
 #include "HAL/IConsoleManager.h"
@@ -44,6 +45,8 @@ void AODWeaponActor::InitializeFromData(const UODWeaponData* InWeaponData)
 	TraceEnd = InWeaponData->TraceEnd;
 	TraceRadius = InWeaponData->TraceRadius;
 	TraceSamples = FMath::Max(InWeaponData->TraceSamples, 2);
+	FieldHitRadius = InWeaponData->FieldHitRadius;
+	FieldHitHalfAngle = InWeaponData->FieldHitHalfAngle;
 }
 
 void AODWeaponActor::BeginTrace()
@@ -109,6 +112,71 @@ void AODWeaponActor::EndTrace()
 	bTracing = false;
 	PreviousPoints.Reset();
 	HitActors.Reset();
+}
+
+void AODWeaponActor::PerformAreaHit()
+{
+	UWorld* World = GetWorld();
+	AActor* OwnerActor = GetOwner();
+	if (!IsValid(World) || !IsValid(OwnerActor))
+	{
+		return;
+	}
+
+	const FVector Origin = OwnerActor->GetActorLocation();
+	const FVector Forward = OwnerActor->GetActorForwardVector().GetSafeNormal2D();
+	const float MinCos = FMath::Cos(FMath::DegreesToRadians(FieldHitHalfAngle));
+
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ODWeaponAreaHit), false);
+	QueryParams.AddIgnoredActor(this);
+	QueryParams.AddIgnoredActor(OwnerActor);
+
+	TArray<FOverlapResult> Overlaps;
+	World->OverlapMultiByObjectType(Overlaps, Origin, FQuat::Identity, FCollisionObjectQueryParams(ECC_Pawn), FCollisionShape::MakeSphere(FieldHitRadius), QueryParams);
+
+	const bool bDrawDebug = CVarDrawWeaponTrace.GetValueOnGameThread();
+	if (bDrawDebug)
+	{
+		const FVector Left = Forward.RotateAngleAxis(-FieldHitHalfAngle, FVector::UpVector);
+		const FVector Right = Forward.RotateAngleAxis(FieldHitHalfAngle, FVector::UpVector);
+		DrawDebugLine(World, Origin, Origin + Left * FieldHitRadius, FColor::Green, false, 1.0f, 0, 1.5f);
+		DrawDebugLine(World, Origin, Origin + Right * FieldHitRadius, FColor::Green, false, 1.0f, 0, 1.5f);
+		DrawDebugLine(World, Origin + Left * FieldHitRadius, Origin + Forward * FieldHitRadius, FColor::Green, false, 1.0f, 0, 1.5f);
+		DrawDebugLine(World, Origin + Forward * FieldHitRadius, Origin + Right * FieldHitRadius, FColor::Green, false, 1.0f, 0, 1.5f);
+	}
+
+	TArray<AActor*, TInlineAllocator<16>> Processed;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		AActor* HitActor = Overlap.GetActor();
+		if (!IsValid(HitActor) || Processed.Contains(HitActor))
+		{
+			continue;
+		}
+		Processed.Add(HitActor);
+
+		// 정면 부채꼴 안에 있는 대상만. (몸이 겹칠 만큼 가까우면 각도와 무관하게 맞는다)
+		FVector ToTarget = HitActor->GetActorLocation() - Origin;
+		ToTarget.Z = 0.0;
+		const double Distance = ToTarget.Size();
+		const FVector Direction = Distance > UE_KINDA_SMALL_NUMBER ? ToTarget / Distance : Forward;
+		if (Distance > 60.0 && FVector::DotProduct(Forward, Direction) < MinCos)
+		{
+			continue;
+		}
+
+		FHitResult Hit(HitActor, Overlap.GetComponent(), HitActor->GetActorLocation(), -Direction);
+		Hit.TraceStart = Origin;
+		Hit.TraceEnd = HitActor->GetActorLocation();
+		Hit.Location = Hit.ImpactPoint;
+		Hit.bBlockingHit = true;
+		SendHitEvent(Hit);
+
+		if (bDrawDebug)
+		{
+			DrawDebugSphere(World, Hit.ImpactPoint, 20.0f, 8, FColor::Red, false, 1.0f);
+		}
+	}
 }
 
 void AODWeaponActor::GetTracePoints(TArray<FVector>& OutPoints) const

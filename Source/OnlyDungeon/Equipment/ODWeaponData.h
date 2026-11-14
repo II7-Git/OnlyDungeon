@@ -88,4 +88,12 @@ public:
 	/** 칼날을 따라 나눌 판정 지점 수 (2 이상) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace", meta = (ClampMin = "2", ClampMax = "16"))
 	int32 TraceSamples = 4;
+
+	/** 필드 모드 범위 판정: 캐릭터 중심에서의 반경 (칼날 스윕 대신 전방 부채꼴로 여러 적을 한 번에 맞힌다) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Field", meta = (ClampMin = "10.0", Units = "cm"))
+	float FieldHitRadius = 220.0f;
+
+	/** 필드 모드 범위 판정: 캐릭터 정면 기준 좌우 각도 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Field", meta = (ClampMin = "5.0", ClampMax = "180.0", Units = "deg"))
+	float FieldHitHalfAngle = 60.0f;
 };

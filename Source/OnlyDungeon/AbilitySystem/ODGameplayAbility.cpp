@@ -4,6 +4,7 @@
 
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "Character/ODCharacterBase.h"
+#include "Character/ODCombatModeComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "AbilitySystemComponent.h"
@@ -80,6 +81,16 @@ FVector UODGameplayAbility::GetAimDirection(float DeadZone) const
 		}
 	}
 
+	// 필드 모드(쿼터뷰): 마우스 커서 방향. 이동 방향과 무관하게 커서 쪽으로 공격한다.
+	if (const UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo(); IsValid(ASC) && ASC->HasMatchingGameplayTag(ODGameplayTags::Mode_Field))
+	{
+		FVector CursorDirection;
+		if (const UODCombatModeComponent* ModeComponent = Character->FindComponentByClass<UODCombatModeComponent>(); IsValid(ModeComponent) && ModeComponent->GetCursorAimDirection(CursorDirection))
+		{
+			return CursorDirection;
+		}
+	}
+
 	return GetMovementInputDirection(DeadZone);
 }
 
@@ -123,15 +134,27 @@ void UODGameplayAbility::OnCancelWindowEvent(FGameplayEventData Payload)
 		return;
 	}
 
-	const bool bOpen = Payload.EventMagnitude > 0.0f;
-	if (bOpen && !bCancelWindowApplied)
+	if (Payload.EventMagnitude > 0.0f)
+	{
+		OpenCancelWindow();
+	}
+	else
+	{
+		ClearCancelWindow();
+	}
+}
+
+void UODGameplayAbility::OpenCancelWindow()
+{
+	if (bCancelWindowApplied)
+	{
+		return;
+	}
+
+	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo(); IsValid(ASC))
 	{
 		ASC->AddLooseGameplayTag(ODGameplayTags::State_Cancelable);
 		bCancelWindowApplied = true;
-	}
-	else if (!bOpen)
-	{
-		ClearCancelWindow();
 	}
 }
 

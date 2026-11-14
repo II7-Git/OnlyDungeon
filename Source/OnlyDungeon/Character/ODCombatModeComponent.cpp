@@ -3,6 +3,7 @@
 #include "ODCombatModeComponent.h"
 
 #include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "EnhancedInputSubsystems.h"
@@ -27,6 +28,7 @@ UODCombatModeComponent::UODCombatModeComponent(const FObjectInitializer& ObjectI
 	FieldSettings.bDoCollisionTest = false;
 	FieldSettings.CameraLagSpeed = 10.0f;
 	FieldSettings.FieldOfView = 90.0f;
+	FieldSettings.bShowMouseCursor = true;
 
 	// 보스: 캐릭터 뒤 3인칭
 	BossSettings.ArmLength = 400.0f;
@@ -71,6 +73,7 @@ void UODCombatModeComponent::SetCombatMode(EODCombatMode NewMode, bool bForce)
 	ApplyCamera(GetSettings(NewMode), true);
 	ApplyInputMapping(NewMode);
 	ApplyModeTags(NewMode);
+	ApplyCursor(GetSettings(NewMode));
 
 	UE_LOG(LogOD, Log, TEXT("%s 전투 모드: %s"), *GetNameSafe(GetOwner()), NewMode == EODCombatMode::Field ? TEXT("필드(쿼터뷰)") : TEXT("보스(3인칭)"));
 	if (bChanged)
@@ -89,6 +92,7 @@ void UODCombatModeComponent::ReapplyCurrentMode()
 	ApplyCamera(GetSettings(CurrentMode), false);
 	ApplyInputMapping(CurrentMode);
 	ApplyModeTags(CurrentMode);
+	ApplyCursor(GetSettings(CurrentMode));
 }
 
 void UODCombatModeComponent::ApplyCamera(const FODCombatModeSettings& Settings, bool bEnteringMode)
@@ -167,6 +171,71 @@ void UODCombatModeComponent::ApplyModeTags(EODCombatMode Mode)
 	}
 	ASC->SetLooseGameplayTagCount(ODGameplayTags::Mode_Field, Mode == EODCombatMode::Field ? 1 : 0);
 	ASC->SetLooseGameplayTagCount(ODGameplayTags::Mode_Boss, Mode == EODCombatMode::Boss ? 1 : 0);
+}
+
+void UODCombatModeComponent::ApplyCursor(const FODCombatModeSettings& Settings)
+{
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	APlayerController* PC = IsValid(Pawn) ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	if (!PC || !PC->IsLocalController())
+	{
+		return;
+	}
+
+	PC->SetShowMouseCursor(Settings.bShowMouseCursor);
+	if (Settings.bShowMouseCursor)
+	{
+		// 커서를 화면에 둔 채 클릭도 게임 입력으로 받는다. (클릭 중에도 커서를 숨기지 않아야 조준 방향이 유지된다)
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		PC->SetInputMode(InputMode);
+	}
+	else
+	{
+		PC->SetInputMode(FInputModeGameOnly());
+	}
+}
+
+bool UODCombatModeComponent::GetCursorAimDirection(FVector& OutDirection) const
+{
+	if (!GetSettings(CurrentMode).bShowMouseCursor || bInCinematic)
+	{
+		return false;
+	}
+
+	const ACharacter* Character = Cast<ACharacter>(GetOwner());
+	const APlayerController* PC = IsValid(Character) ? Cast<APlayerController>(Character->GetController()) : nullptr;
+	if (!PC)
+	{
+		return false;
+	}
+
+	FVector RayOrigin;
+	FVector RayDirection;
+	if (!PC->DeprojectMousePositionToWorld(RayOrigin, RayDirection) || FMath::IsNearlyZero(RayDirection.Z))
+	{
+		return false;
+	}
+
+	// 캐릭터 발 높이의 수평면과 커서 광선의 교점
+	const FVector CharacterLocation = Character->GetActorLocation();
+	const float HalfHeight = IsValid(Character->GetCapsuleComponent()) ? Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : 0.0f;
+	const double Distance = (CharacterLocation.Z - HalfHeight - RayOrigin.Z) / RayDirection.Z;
+	if (Distance <= 0.0)
+	{
+		return false;
+	}
+
+	FVector ToCursor = RayOrigin + RayDirection * Distance - CharacterLocation;
+	ToCursor.Z = 0.0;
+	if (ToCursor.IsNearlyZero())
+	{
+		return false;
+	}
+
+	OutDirection = ToCursor.GetSafeNormal2D();
+	return true;
 }
 
 void UODCombatModeComponent::SetCinematicMode(bool bEnable)

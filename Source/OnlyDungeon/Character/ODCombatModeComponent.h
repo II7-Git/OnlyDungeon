@@ -51,6 +51,10 @@ struct FODCombatModeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Mode", meta = (ClampMin = "10.0", ClampMax = "170.0"))
 	float FieldOfView = 90.0f;
 
+	/** 마우스 커서를 보여 주고 커서 방향으로 조준하는지 (쿼터뷰) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Mode")
+	bool bShowMouseCursor = false;
+
 	/** 이 모드의 입력 매핑 (모드가 바뀌면 교체) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Mode")
 	TObjectPtr<UInputMappingContext> InputMapping;
@@ -67,7 +71,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODCinematicChangedSignature, bool, 
  * 모드가 바뀌면 카메라(거리·각도·시점 회전), 입력 매핑, 모드 태그(Mode.Field / Mode.Boss), 이동 기준 방향을 한꺼번에 바꾼다.
  * 컷신 중에는 플레이어 입력을 막고 진행 중인 행동을 끊는다. (HUD는 OnCinematicChanged를 보고 숨는다)
  * 시작 모드는 AODGameMode::InitialCombatMode, OD 게임 모드가 아니면 DefaultMode.
- * 락온·조준 방식 전환은 락온 시스템 구현 때 이 컴포넌트에 추가한다.
+ * 필드 모드에서는 마우스 커서를 보여 주고, 공격이 커서 방향으로 나가도록 조준 방향을 제공한다. (락온은 UODLockOnComponent)
  */
 UCLASS(ClassGroup = (OnlyDungeon), meta = (BlueprintSpawnableComponent))
 class ONLYDUNGEON_API UODCombatModeComponent : public UActorComponent
@@ -100,6 +104,13 @@ public:
 	/** 마우스 시점 입력을 받을지 */
 	bool AllowsLookInput() const;
 
+	/**
+	 * 캐릭터에서 마우스 커서가 가리키는 바닥 지점으로의 방향 (Z 제거·정규화).
+	 * 커서를 쓰는 모드가 아니거나 구할 수 없으면 false.
+	 * 충돌 판정 대신 캐릭터 발 높이의 수평면과 교차시켜, 지형·적에 가려도 방향이 튀지 않게 한다.
+	 */
+	bool GetCursorAimDirection(FVector& OutDirection) const;
+
 	const FODCombatModeSettings& GetSettings(EODCombatMode Mode) const;
 
 	UPROPERTY(BlueprintAssignable, Category = "OD|Mode")
@@ -127,6 +138,7 @@ private:
 	void ApplyCamera(const FODCombatModeSettings& Settings, bool bEnteringMode);
 	void ApplyInputMapping(EODCombatMode Mode);
 	void ApplyModeTags(EODCombatMode Mode);
+	void ApplyCursor(const FODCombatModeSettings& Settings);
 
 	EODCombatMode CurrentMode = EODCombatMode::Boss;
 	bool bModeApplied = false;

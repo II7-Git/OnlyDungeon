@@ -68,7 +68,7 @@ protected:
 
 	/**
 	 * 공격·방어가 향할 방향 (월드 기준, Z 제거·정규화). 정할 방향이 없으면 ZeroVector.
-	 * 락온(또는 AI) 대상이 있으면 대상 방향, 없으면 이동 입력 방향이다.
+	 * 락온(또는 AI) 대상이 있으면 대상 방향, 필드 모드면 마우스 커서 방향, 그 외에는 이동 입력 방향이다.
 	 */
 	FVector GetAimDirection(float DeadZone = 0.1f) const;
 
@@ -78,6 +78,9 @@ protected:
 	 * 행동 어빌리티의 ActivateAbility에서 몽타주 재생 전에 호출한다.
 	 */
 	void ListenForCancelWindow();
+
+	/** 캔슬 구간을 지금 연다. (몽타주 노티파이 없이 여는 경우: 필드 모드의 판정 직후 캔슬) */
+	void OpenCancelWindow();
 
 	/** 캔슬 구간 태그를 즉시 제거 (구간을 벗어나는 섹션 이동 시 등) */
 	void ClearCancelWindow();

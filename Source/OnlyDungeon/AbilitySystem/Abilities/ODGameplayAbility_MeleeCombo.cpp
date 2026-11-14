@@ -67,6 +67,10 @@ void UODGameplayAbility_MeleeCombo::ActivateAbility(const FGameplayAbilitySpecHa
 	HitTask->EventReceived.AddDynamic(this, &ThisClass::OnMeleeHit);
 	HitTask->ReadyForActivation();
 
+	UAbilityTask_WaitGameplayEvent* HitTraceTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ODGameplayTags::Event_Montage_HitTrace, nullptr, false, true);
+	HitTraceTask->EventReceived.AddDynamic(this, &ThisClass::OnHitTraceEvent);
+	HitTraceTask->ReadyForActivation();
+
 	// 무기를 공격용 부착 위치로 (무기 데이터에 지정된 경우만)
 	if (AODCharacterBase* OwnerCharacter = GetODCharacterFromActorInfo(); IsValid(OwnerCharacter) && IsValid(OwnerCharacter->GetEquipmentComponent()))
 	{
@@ -183,6 +187,16 @@ bool UODGameplayAbility_MeleeCombo::TryBranchCombo()
 
 	// 이 호출 안에서 이 어빌리티가 끊기므로, 이후에는 멤버를 건드리지 않는다.
 	return ODASC->TryActivateComboBranch(QueuedBranchInputTag);
+}
+
+void UODGameplayAbility_MeleeCombo::OnHitTraceEvent(FGameplayEventData Payload)
+{
+	// 필드: 판정이 끝나면 바로 회피로 끊을 수 있다. 보스 모드는 몽타주의 캔슬 구간 노티파이(끝부분)만 따른다.
+	const UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+	if (Payload.EventMagnitude <= 0.0f && IsValid(ASC) && ASC->HasMatchingGameplayTag(ODGameplayTags::Mode_Field))
+	{
+		OpenCancelWindow();
+	}
 }
 
 void UODGameplayAbility_MeleeCombo::OnMeleeHit(FGameplayEventData Payload)

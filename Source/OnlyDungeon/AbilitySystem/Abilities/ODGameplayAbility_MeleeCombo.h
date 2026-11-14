@@ -146,6 +146,10 @@ private:
 	UFUNCTION()
 	void OnMeleeHit(FGameplayEventData Payload);
 
+	/** 판정 구간 시작·끝. 필드 모드에서는 판정이 끝나는 즉시 회피 캔슬을 허용한다. (빠른 캔슬) */
+	UFUNCTION()
+	void OnHitTraceEvent(FGameplayEventData Payload);
+
 	UFUNCTION()
 	void OnMontageFinished();
 
