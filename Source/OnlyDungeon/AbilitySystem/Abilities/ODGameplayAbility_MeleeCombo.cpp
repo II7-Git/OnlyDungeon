@@ -9,6 +9,7 @@
 #include "Abilities/Tasks/AbilityTask_WaitGameplayEvent.h"
 #include "Animation/AnimMontage.h"
 #include "Character/ODCharacterBase.h"
+#include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
 #include "Equipment/ODEquipmentComponent.h"
@@ -40,11 +41,21 @@ void UODGameplayAbility_MeleeCombo::ActivateAbility(const FGameplayAbilitySpecHa
 	ComboIndex = 0;
 	bComboWindowOpen = false;
 	bComboQueued = false;
+	bBranchQueued = false;
+
+	// 다른 콤보의 파생으로 발동되었는지 (ASC가 발동 동안만 State.ComboBranch를 붙인다)
+	const UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+	const bool bActivatedAsBranch = bCanBeComboBranch && IsValid(ASC) && ASC->HasMatchingGameplayTag(ODGameplayTags::State_ComboBranch);
+	UAnimMontage* MontageToPlay = (bActivatedAsBranch && IsValid(BranchMontage)) ? BranchMontage.Get() : ComboMontage.Get();
 
 	if (bRotateToInput)
 	{
 		RotateToInputDirection();
 	}
+
+	UAbilityTask_WaitGameplayEvent* BranchTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ODGameplayTags::Event_Combo_BranchInput, nullptr, false, true);
+	BranchTask->EventReceived.AddDynamic(this, &ThisClass::OnBranchInputEvent);
+	BranchTask->ReadyForActivation();
 
 	UAbilityTask_WaitGameplayEvent* WindowTask = UAbilityTask_WaitGameplayEvent::WaitGameplayEvent(this, ODGameplayTags::Event_Montage_ComboWindow, nullptr, false, true);
 	WindowTask->EventReceived.AddDynamic(this, &ThisClass::OnComboWindowEvent);
@@ -62,7 +73,7 @@ void UODGameplayAbility_MeleeCombo::ActivateAbility(const FGameplayAbilitySpecHa
 		OwnerCharacter->GetEquipmentComponent()->SetAbilityAttachment(true);
 	}
 
-	UAbilityTask_PlayMontageAndWait* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, ComboMontage, MontagePlayRate, ComboSteps[0].Section);
+	UAbilityTask_PlayMontageAndWait* MontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, MontageToPlay, MontagePlayRate, ComboSteps[0].Section);
 	MontageTask->OnCompleted.AddDynamic(this, &ThisClass::OnMontageFinished);
 	MontageTask->OnBlendOut.AddDynamic(this, &ThisClass::OnMontageFinished);
 	MontageTask->OnInterrupted.AddDynamic(this, &ThisClass::OnMontageCancelled);
@@ -71,7 +82,7 @@ void UODGameplayAbility_MeleeCombo::ActivateAbility(const FGameplayAbilitySpecHa
 
 	StartStepForward();
 
-	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 콤보 시작: %s"), *GetName(), *ComboSteps[0].Section.ToString());
+	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 콤보 시작: %s%s"), *GetName(), *ComboSteps[0].Section.ToString(), bActivatedAsBranch ? TEXT(" (파생)") : TEXT(""));
 }
 
 void UODGameplayAbility_MeleeCombo::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
@@ -91,6 +102,7 @@ void UODGameplayAbility_MeleeCombo::EndAbility(const FGameplayAbilitySpecHandle 
 	ComboIndex = 0;
 	bComboWindowOpen = false;
 	bComboQueued = false;
+	bBranchQueued = false;
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
@@ -104,8 +116,9 @@ void UODGameplayAbility_MeleeCombo::InputPressed(const FGameplayAbilitySpecHandl
 		return;
 	}
 
-	// 공격 중 입력은 예약해 두고, 콤보 구간이 열려 있으면 바로 다음 타격으로 넘어간다.
+	// 공격 중 입력은 예약해 두고, 콤보 구간이 열려 있으면 바로 다음 타격으로 넘어간다. (마지막 입력이 우선)
 	bComboQueued = true;
+	bBranchQueued = false;
 	if (bComboWindowOpen)
 	{
 		TryAdvanceCombo();
@@ -119,7 +132,11 @@ void UODGameplayAbility_MeleeCombo::OnComboWindowEvent(FGameplayEventData Payloa
 	if (bComboWindowOpen)
 	{
 		// 구간이 열리기 전에 눌러 둔 입력 처리
-		if (bComboQueued)
+		if (bBranchQueued)
+		{
+			TryBranchCombo();
+		}
+		else if (bComboQueued)
 		{
 			TryAdvanceCombo();
 		}
@@ -128,7 +145,44 @@ void UODGameplayAbility_MeleeCombo::OnComboWindowEvent(FGameplayEventData Payloa
 	{
 		// 구간이 닫힌 뒤의 입력은 다음 콤보로 이어지지 않는다.
 		bComboQueued = false;
+		bBranchQueued = false;
 	}
+}
+
+void UODGameplayAbility_MeleeCombo::OnBranchInputEvent(FGameplayEventData Payload)
+{
+	if (!IsActive() || !ComboSteps.IsValidIndex(ComboIndex) || !ComboSteps[ComboIndex].bAllowBranch || Payload.InstigatorTags.IsEmpty())
+	{
+		return;
+	}
+
+	bBranchQueued = true;
+	bComboQueued = false;
+	QueuedBranchInputTag = Payload.InstigatorTags.First();
+
+	if (bComboWindowOpen)
+	{
+		TryBranchCombo();
+	}
+}
+
+bool UODGameplayAbility_MeleeCombo::TryBranchCombo()
+{
+	bBranchQueued = false;
+
+	if (!ComboSteps.IsValidIndex(ComboIndex) || !ComboSteps[ComboIndex].bAllowBranch)
+	{
+		return false;
+	}
+
+	UODAbilitySystemComponent* ODASC = Cast<UODAbilitySystemComponent>(GetAbilitySystemComponentFromActorInfo());
+	if (!IsValid(ODASC))
+	{
+		return false;
+	}
+
+	// 이 호출 안에서 이 어빌리티가 끊기므로, 이후에는 멤버를 건드리지 않는다.
+	return ODASC->TryActivateComboBranch(QueuedBranchInputTag);
 }
 
 void UODGameplayAbility_MeleeCombo::OnMeleeHit(FGameplayEventData Payload)

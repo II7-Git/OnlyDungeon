@@ -30,4 +30,11 @@ public:
 
 	/** 진행 중인 행동 어빌리티(Ability.Action)를 모두 끊는다. 캔슬 구간 입력에서 사용 */
 	void CancelActionAbilities();
+
+	/**
+	 * 진행 중인 콤보에서 파생 공격으로 넘어간다. (콤보 어빌리티가 입력 구간에서 호출)
+	 * InputTag에 연결된 파생 가능 어빌리티를 찾아, 진행 중인 행동을 끊고 State.ComboBranch를 잠시 붙인 채 발동한다.
+	 * @return 발동에 성공하면 true
+	 */
+	bool TryActivateComboBranch(const FGameplayTag& InputTag);
 };

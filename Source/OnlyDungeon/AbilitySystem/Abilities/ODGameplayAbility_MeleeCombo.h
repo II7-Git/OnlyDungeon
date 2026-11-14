@@ -39,6 +39,10 @@ struct FODComboStep
 	/** 섹션 시작 후 전진을 시작하기까지의 지연(초). 휘두르기 직전 발을 내딛는 타이밍에 맞추는 용도 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Step", meta = (ClampMin = "0.0", Units = "s"))
 	float StepDelay = 0.0f;
+
+	/** 이 타격의 콤보 입력 구간에서 파생 공격(강공 입력)으로 넘어갈 수 있는지 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Branch")
+	bool bAllowBranch = false;
 };
 
 /**
@@ -56,6 +60,11 @@ struct FODComboStep
  * - 판정: 공격 섹션의 무기 판정 노티파이(UODAnimNotifyState_WeaponTrace)가 Event.Melee.Hit을 보내면
  *   현재 타격의 피해·강인도 피해를 SetByCaller로 담아 DamageEffectClass를 대상에게 적용한다.
  * - 상태 태그(State.Attacking)와 차단 태그는 BP(GA_*)에서 지정한다.
+ *
+ * 파생 콤보 (약공 → 강공)
+ * - bAllowBranch인 타격 중에 파생 공격 입력(Event.Combo.BranchInput)이 오면 예약하고, 콤보 입력 구간에서 ASC의 TryActivateComboBranch로 넘어간다.
+ *   (다음 타격 입력과 같은 타이밍 규칙. 구간이 닫히면 예약 취소)
+ * - bCanBeComboBranch인 어빌리티(강공)는 파생으로 발동되면 BranchMontage(없으면 ComboMontage)를 재생한다.
  */
 UCLASS(Abstract)
 class ONLYDUNGEON_API UODGameplayAbility_MeleeCombo : public UODGameplayAbility
@@ -67,6 +76,8 @@ public:
 
 	/** 콤보는 실행 중 입력(다음 타격)을 직접 처리한다. */
 	virtual bool HandlesInputWhileActive() const override { return true; }
+
+	virtual bool CanActivateAsComboBranch() const override { return bCanBeComboBranch; }
 
 protected:
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
@@ -93,6 +104,14 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo")
 	bool bRotateToInput = true;
 
+	/** 다른 콤보의 파생 공격으로 발동될 수 있는지 (강공격) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Branch")
+	bool bCanBeComboBranch = false;
+
+	/** 파생으로 발동될 때 재생할 몽타주. 비우면 ComboMontage를 그대로 쓴다. (섹션 이름은 ComboSteps와 같아야 함) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Branch", meta = (EditCondition = "bCanBeComboBranch"))
+	TObjectPtr<UAnimMontage> BranchMontage;
+
 private:
 	/** 다음 공격 섹션으로 넘어간다. 마지막이거나 스태미나가 부족하면 넘어가지 않는다. */
 	void TryAdvanceCombo();
@@ -116,6 +135,13 @@ private:
 	UFUNCTION()
 	void OnComboWindowEvent(FGameplayEventData Payload);
 
+	/** 공격 중 파생 공격 입력 (ASC가 보냄) */
+	UFUNCTION()
+	void OnBranchInputEvent(FGameplayEventData Payload);
+
+	/** 예약된 파생 공격으로 넘어간다. 현재 타격이 파생을 허용하지 않으면 아무것도 하지 않는다. */
+	bool TryBranchCombo();
+
 	/** 무기가 대상을 맞혔을 때 */
 	UFUNCTION()
 	void OnMeleeHit(FGameplayEventData Payload);
@@ -134,4 +160,8 @@ private:
 
 	/** 다음 공격 입력이 예약되었는지 */
 	bool bComboQueued = false;
+
+	/** 파생 공격 입력이 예약되었는지와 그 입력 태그 */
+	bool bBranchQueued = false;
+	FGameplayTag QueuedBranchInputTag;
 };

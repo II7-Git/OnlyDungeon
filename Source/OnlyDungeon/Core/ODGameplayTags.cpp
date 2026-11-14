@@ -25,7 +25,8 @@ namespace ODGameplayTags
 	// ---------- 상태 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Dead, "State.Dead", "사망");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Attacking, "State.Attacking", "공격 중");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Cancelable, "State.Cancelable", "캔슬 구간: 지금 행동을 회피·다른 행동·이동으로 끊을 수 있음");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Cancelable, "State.Cancelable", "캔슬 구간: 지금 행동을 회피로 끊을 수 있음");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_ComboBranch, "State.ComboBranch", "약공 콤보에서 파생 공격(강공)으로 발동되는 중 (ASC가 발동 직전에만 잠시 부여)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Parrying, "State.Parrying", "패링 판정 구간 (이 동안 정면 공격을 받으면 패링 성공)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Dodging, "State.Dodging", "회피 중");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Defending, "State.Defending", "가드 중 (정면 공격 피해 감소, 스태미나로 막음)");
@@ -42,6 +43,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_HitTrace, "Event.Montage.HitTrace", "공격 몽타주의 판정 구간 (AnimNotify → 어빌리티)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Melee_Hit, "Event.Melee.Hit", "내 무기가 대상을 맞힘 (무기 → 공격 어빌리티)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_CancelWindow, "Event.Montage.CancelWindow", "캔슬 구간 (열림 1 / 닫힘 0, AnimNotify → 어빌리티)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combo_BranchInput, "Event.Combo.BranchInput", "공격 중 파생 공격 입력 (ASC → 진행 중인 콤보, InstigatorTags에 입력 태그)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Action, "Ability.Action", "공격·방어·회피처럼 캔슬 구간에서 끊길 수 있는 행동 어빌리티");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_ComboWindow, "Event.Montage.ComboWindow", "콤보 입력 구간 (열림 1 / 닫힘 0, AnimNotify → 어빌리티)");
 

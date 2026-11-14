@@ -26,6 +26,7 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 	// 순회 중에는 어빌리티 목록이 바뀌면 안 되므로, 발동할 핸들을 모아 두었다가 순회가 끝난 뒤 발동한다.
 	TArray<FGameplayAbilitySpecHandle> HandlesToActivate;
 	TArray<FGameplayAbilitySpecHandle> HandlesToRestart;
+	bool bSendBranchInput = false;
 	{
 		ABILITYLIST_SCOPE_LOCK();
 		for (FGameplayAbilitySpec& Spec : ActivatableAbilities.Items)
@@ -51,6 +52,13 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 
 				// 이미 실행 중인 어빌리티에는 입력 눌림만 전달한다. (콤보 입력 등)
 				AbilitySpecInputPressed(Spec);
+				continue;
+			}
+
+			// 공격 중에 파생 가능한 공격 입력이 들어오면 진행 중인 콤보에 알린다. (콤보 입력 구간에서 콤보가 직접 넘어간다)
+			if (!bCanCancel && ODAbility && ODAbility->CanActivateAsComboBranch() && HasMatchingGameplayTag(ODGameplayTags::State_Attacking))
+			{
+				bSendBranchInput = true;
 				continue;
 			}
 
@@ -82,6 +90,42 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 			UE_LOG(LogODAbility, Verbose, TEXT("입력 %s: 어빌리티 발동 조건 불충족"), *InputTag.ToString());
 		}
 	}
+
+	if (bSendBranchInput)
+	{
+		FGameplayEventData Payload;
+		Payload.EventTag = ODGameplayTags::Event_Combo_BranchInput;
+		Payload.InstigatorTags.AddTag(InputTag);
+		HandleGameplayEvent(Payload.EventTag, &Payload);
+	}
+}
+
+bool UODAbilitySystemComponent::TryActivateComboBranch(const FGameplayTag& InputTag)
+{
+	FGameplayAbilitySpecHandle BranchHandle;
+	for (const FGameplayAbilitySpec& Spec : ActivatableAbilities.Items)
+	{
+		const UODGameplayAbility* ODAbility = Cast<UODGameplayAbility>(Spec.Ability);
+		if (ODAbility && ODAbility->CanActivateAsComboBranch() && !Spec.IsActive() && Spec.GetDynamicSpecSourceTags().HasTagExact(InputTag))
+		{
+			BranchHandle = Spec.Handle;
+			break;
+		}
+	}
+
+	if (!BranchHandle.IsValid())
+	{
+		return false;
+	}
+
+	// 진행 중인 콤보를 끊어 상태 태그(State.Attacking)를 풀고, 파생 발동임을 알리는 태그를 발동 동안만 붙인다.
+	CancelActionAbilities();
+	AddLooseGameplayTag(ODGameplayTags::State_ComboBranch);
+	const bool bActivated = TryActivateAbility(BranchHandle);
+	SetLooseGameplayTagCount(ODGameplayTags::State_ComboBranch, 0);
+
+	UE_LOG(LogODAbility, Verbose, TEXT("콤보 파생 %s: %s"), *InputTag.ToString(), bActivated ? TEXT("발동") : TEXT("실패"));
+	return bActivated;
 }
 
 void UODAbilitySystemComponent::AbilityInputTagReleased(const FGameplayTag& InputTag)

@@ -49,6 +49,9 @@ public:
 	 */
 	virtual bool HandlesInputWhileActive() const { return false; }
 
+	/** 진행 중인 콤보의 파생 공격으로 발동될 수 있는지 (예: 약공 → 강공) */
+	virtual bool CanActivateAsComboBranch() const { return false; }
+
 	/** 어빌리티를 소유한 OnlyDungeon ASC (없으면 nullptr) */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Ability")
 	UODAbilitySystemComponent* GetODAbilitySystemComponentFromActorInfo() const;
