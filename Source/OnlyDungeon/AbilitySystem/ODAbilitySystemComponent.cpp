@@ -51,6 +51,9 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 				}
 
 				// 이미 실행 중인 어빌리티에는 입력 눌림만 전달한다. (콤보 입력 등)
+				const UGameplayAbility* Instance = Spec.GetPrimaryInstance();
+				UE_LOG(LogODAbility, Verbose, TEXT("입력 %s: 실행 중인 %s에 전달 (ActiveCount %d, 인스턴스 활성 %d)"),
+					*InputTag.ToString(), *GetNameSafe(Spec.Ability), Spec.ActiveCount, Instance ? Instance->IsActive() : -1);
 				AbilitySpecInputPressed(Spec);
 				continue;
 			}
@@ -87,7 +90,17 @@ void UODAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& Input
 	{
 		if (!TryActivateAbility(Handle))
 		{
-			UE_LOG(LogODAbility, Verbose, TEXT("입력 %s: 어빌리티 발동 조건 불충족"), *InputTag.ToString());
+			// 실패 원인 기록 (log LogODAbility Verbose 로 확인)
+			if (const FGameplayAbilitySpec* Spec = FindAbilitySpecFromHandle(Handle); Spec && Spec->Ability)
+			{
+				FGameplayTagContainer FailureTags;
+				const bool bCanActivate = Spec->Ability->CanActivateAbility(Handle, AbilityActorInfo.Get(), nullptr, nullptr, &FailureTags);
+				const bool bCostOk = Spec->Ability->CheckCost(Handle, AbilityActorInfo.Get());
+				FGameplayTagContainer OwnedTags;
+				GetOwnedGameplayTags(OwnedTags);
+				UE_LOG(LogODAbility, Verbose, TEXT("입력 %s: %s 발동 실패 (CanActivate %d, 비용 %d, 실패 태그 [%s], 보유 태그 [%s], 차단된 어빌리티 태그 [%s])"),
+					*InputTag.ToString(), *GetNameSafe(Spec->Ability), bCanActivate, bCostOk, *FailureTags.ToStringSimple(), *OwnedTags.ToStringSimple(), *BlockedAbilityTags.GetExplicitGameplayTags().ToStringSimple());
+			}
 		}
 	}
 
@@ -115,6 +128,7 @@ bool UODAbilitySystemComponent::TryActivateComboBranch(const FGameplayTag& Input
 
 	if (!BranchHandle.IsValid())
 	{
+		UE_LOG(LogODAbility, Verbose, TEXT("콤보 파생 %s: 대상 어빌리티 없음"), *InputTag.ToString());
 		return false;
 	}
 
