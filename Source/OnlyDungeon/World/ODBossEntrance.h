@@ -22,9 +22,12 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODBossEntranceSignature, APawn*, En
 
 /**
  * 보스방 입구. 플레이어가 문 앞 트리거 안에서 상호작용하면:
- *  1) 컷신 상태로 전환(입력 차단, HUD 숨김), 문 앞 지점(EntryPoint)으로 걸어간다.
- *  2) 문이 열리고 입장 레벨 시퀀스가 재생된다. 시퀀스는 EntryPoint 기준 상대 좌표로 재생된다. (Transform Origin)
- *  3) 플레이어가 문을 지나 보스방 지점(RoomPoint)까지 걸어 들어간다. (Root Motion Source, 이동 속도만큼 조깅 모션)
+ *  1) 컷신 상태로 전환(입력 차단, HUD 숨김), 문 정면 지점(EntryPoint)까지 걸어가 문 쪽으로 돌아선다.
+ *  2) 그 자리에서 입장 레벨 시퀀스가 시작되고 문이 열린다. 시퀀스는 EntryPoint 기준 상대 좌표로 재생된다. (Transform Origin)
+ *  3) 플레이어가 문을 지나 보스방 지점(RoomPoint)까지 걸어 들어간다.
+ *     이동은 실제 이동 입력(AddMovementInput)으로 줘서 걷기·조깅 애니메이션이 그대로 재생된다.
+ *     (Root Motion Source는 가속이 없어 애니메이션 블루프린트가 대기 상태로 남는다)
+ *     이동 입력은 매 프레임 넣어야 해서 컷신 이동 중에만 Tick을 켠다. (평소에는 꺼져 있음)
  *  4) 걷는 동안(시퀀스 카메라가 화면을 잡고 있을 때) 전투 모드를 보스(3인칭)로 바꾸고,
  *     시퀀스가 끝나면 시퀀스 카메라에서 3인칭 카메라로 블렌드한다.
  *  5) 컷신 종료, 문이 닫힌다(안개문처럼 되돌아갈 수 없음). OnEntered 발생 → 이후 보스 활성화에 사용.
@@ -54,6 +57,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void Tick(float DeltaSeconds) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
 	TObjectPtr<USceneComponent> SceneRoot;
@@ -122,6 +126,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Walk", meta = (ClampMin = "0.0", Units = "s"))
 	float WalkInStartTime = 1.2f;
 
+	/** 문 쪽으로 돌아서는 속도 (도/초) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Walk", meta = (ClampMin = "30.0"))
+	float TurnRate = 360.0f;
+
+	/** 목표 지점에 이만큼 가까워지면 도착으로 본다 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Walk", meta = (ClampMin = "1.0", Units = "cm"))
+	float ArriveTolerance = 15.0f;
+
 	/** 시퀀스가 없을 때 3인칭 카메라로 블렌드하는 시간 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance", meta = (ClampMin = "0.0", Units = "s"))
 	float FallbackCameraBlendTime = 0.6f;
@@ -136,16 +148,24 @@ private:
 	UFUNCTION()
 	void OnSequenceFinished();
 
+	/** 문 앞 도착·회전 후: 시퀀스 재생, 문 열기, 걸어 들어가기 예약 */
+	void StartEntrySequence();
 	void StartWalkIn();
 	void FinishEntry();
+
+	/** 컷신 중 캐릭터 이동 단계 */
+	enum class EWalkPhase : uint8 { None, Approach, Turn, WalkIn };
+
+	/** 컷신 이동 갱신 (이동 중에만 켜지는 Tick에서 호출) */
+	void UpdateWalk(float DeltaSeconds);
+	void StartWalkPhase(EWalkPhase Phase);
+	void StopWalk();
 
 	/** 문 열림 정도(0~1)를 목표값으로 시간에 걸쳐 바꾼다. */
 	void AnimateDoor(float TargetAlpha);
 	void UpdateDoor();
 	void SetDoorAlpha(float Alpha);
 
-	/** 캐릭터를 목표 지점까지 일정 시간 동안 이동시킨다. (Root Motion Source) */
-	void MoveCharacterTo(ACharacter* Character, const FVector& GroundTarget, float Duration) const;
 
 	UPROPERTY(Transient)
 	TObjectPtr<ULevelSequencePlayer> SequencePlayer;
@@ -166,4 +186,8 @@ private:
 	FTimerHandle DoorDelayTimer;
 	FTimerHandle WalkTimer;
 	FTimerHandle FinishTimer;
+
+	EWalkPhase WalkPhase = EWalkPhase::None;
+	double WalkPhaseStartTime = 0.0;
+	float WalkPhaseTimeout = 0.0f;
 };

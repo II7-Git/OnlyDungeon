@@ -11,7 +11,6 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/RootMotionSource.h"
 #include "LevelSequence.h"
 #include "LevelSequenceActor.h"
 #include "LevelSequencePlayer.h"
@@ -23,14 +22,15 @@
 
 namespace ODBossEntrance
 {
-	const FName WalkSourceName(TEXT("ODBossEntranceWalk"));
 	constexpr float DoorTickInterval = 1.0f / 60.0f;
 }
 
 AODBossEntrance::AODBossEntrance(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	PrimaryActorTick.bCanEverTick = false;
+	// 컷신 중 캐릭터를 걷게 할 때만 Tick을 켠다.
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = false;
 
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = SceneRoot;
@@ -100,6 +100,12 @@ void AODBossEntrance::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+void AODBossEntrance::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+	UpdateWalk(DeltaSeconds);
+}
+
 void AODBossEntrance::OnTriggerBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
 	if (UODInteractionComponent* Interaction = IsValid(OtherActor) ? OtherActor->FindComponentByClass<UODInteractionComponent>() : nullptr)
@@ -124,8 +130,7 @@ bool AODBossEntrance::CanInteract(const APawn* InstigatorPawn) const
 void AODBossEntrance::Interact(APawn* InstigatorPawn)
 {
 	ACharacter* Character = Cast<ACharacter>(InstigatorPawn);
-	UWorld* World = GetWorld();
-	if (!CanInteract(InstigatorPawn) || !IsValid(Character) || !World)
+	if (!CanInteract(InstigatorPawn) || !IsValid(Character) || !GetWorld())
 	{
 		return;
 	}
@@ -133,26 +138,31 @@ void AODBossEntrance::Interact(APawn* InstigatorPawn)
 	bInProgress = true;
 	EnteringPawn = InstigatorPawn;
 
-	UODCombatModeComponent* ModeComponent = InstigatorPawn->FindComponentByClass<UODCombatModeComponent>();
-	if (IsValid(ModeComponent))
+	if (UODCombatModeComponent* ModeComponent = InstigatorPawn->FindComponentByClass<UODCombatModeComponent>())
 	{
 		ModeComponent->SetCinematicMode(true);
 	}
 
-	// 1) 문 앞 지점으로 걸어간다.
-	const FVector EntryLocation = EntryPoint->GetComponentLocation();
-	const double ToEntry = FVector::Dist2D(Character->GetActorLocation(), EntryLocation);
-	const float ApproachTime = static_cast<float>(ToEntry / WalkSpeed);
-	if (ToEntry > 5.0)
+	// 1) 문 정면 지점까지 걸어간 뒤 문 쪽으로 돌아선다. (끝나면 StartEntrySequence)
+	StartWalkPhase(EWalkPhase::Approach);
+
+	UE_LOG(LogOD, Log, TEXT("[%s] 보스방 입장 시작: %s"), *GetName(), *GetNameSafe(InstigatorPawn));
+}
+
+void AODBossEntrance::StartEntrySequence()
+{
+	UWorld* World = GetWorld();
+	if (!World || !bInProgress)
 	{
-		MoveCharacterTo(Character, EntryLocation, ApproachTime);
+		return;
 	}
 
 	// 2) 입장 시퀀스 재생 (EntryPoint 기준)
 	if (IsValid(EntrySequence))
 	{
 		FMovieSceneSequencePlaybackSettings Settings;
-		Settings.bDisableMovementInput = true;
+		// 걸어 들어가기는 이동 입력으로 하므로 이동 입력은 막지 않는다. (플레이어 조작은 컷신 모드에서 이미 막혀 있음)
+		Settings.bDisableMovementInput = false;
 		Settings.bDisableLookAtInput = true;
 
 		ALevelSequenceActor* OutActor = nullptr;
@@ -163,7 +173,7 @@ void AODBossEntrance::Interact(APawn* InstigatorPawn)
 			SequenceActor->bOverrideInstanceData = true;
 			if (UDefaultLevelSequenceInstanceData* InstanceData = Cast<UDefaultLevelSequenceInstanceData>(SequenceActor->DefaultInstanceData))
 			{
-				InstanceData->TransformOrigin = FTransform(EntryPoint->GetComponentRotation(), EntryLocation);
+				InstanceData->TransformOrigin = FTransform(EntryPoint->GetComponentRotation(), EntryPoint->GetComponentLocation());
 			}
 		}
 		if (IsValid(SequencePlayer))
@@ -180,9 +190,7 @@ void AODBossEntrance::Interact(APawn* InstigatorPawn)
 	// 3) 문 열기 → 걸어 들어가기
 	FTimerManager& TimerManager = World->GetTimerManager();
 	TimerManager.SetTimer(DoorDelayTimer, FTimerDelegate::CreateUObject(this, &ThisClass::AnimateDoor, 1.0f), FMath::Max(DoorOpenDelay, KINDA_SMALL_NUMBER), false);
-	TimerManager.SetTimer(WalkTimer, this, &ThisClass::StartWalkIn, FMath::Max3(WalkInStartTime, ApproachTime, KINDA_SMALL_NUMBER), false);
-
-	UE_LOG(LogOD, Log, TEXT("[%s] 보스방 입장 시작: %s"), *GetName(), *GetNameSafe(InstigatorPawn));
+	TimerManager.SetTimer(WalkTimer, this, &ThisClass::StartWalkIn, FMath::Max(WalkInStartTime, KINDA_SMALL_NUMBER), false);
 }
 
 void AODBossEntrance::StartWalkIn()
@@ -194,9 +202,7 @@ void AODBossEntrance::StartWalkIn()
 		return;
 	}
 
-	const FVector RoomLocation = RoomPoint->GetComponentLocation();
-	const float WalkTime = static_cast<float>(FVector::Dist2D(Character->GetActorLocation(), RoomLocation) / WalkSpeed);
-	MoveCharacterTo(Character, RoomLocation, WalkTime);
+	StartWalkPhase(EWalkPhase::WalkIn);
 
 	// 시퀀스 카메라가 화면을 잡고 있는 동안 3인칭으로 바꿔 둔다. (끝나면 시퀀스 카메라에서 블렌드)
 	if (UODCombatModeComponent* ModeComponent = Character->FindComponentByClass<UODCombatModeComponent>())
@@ -204,10 +210,107 @@ void AODBossEntrance::StartWalkIn()
 		ModeComponent->SetCombatMode(ModeAfterEntry);
 	}
 
-	// 시퀀스가 없으면 걷기가 끝날 때 마무리한다.
+	// 시퀀스가 없으면 걷기가 끝날 즈음 마무리한다.
 	if (!IsValid(SequencePlayer))
 	{
-		World->GetTimerManager().SetTimer(FinishTimer, this, &ThisClass::FinishEntry, WalkTime + 0.2f, false);
+		World->GetTimerManager().SetTimer(FinishTimer, this, &ThisClass::FinishEntry, WalkPhaseTimeout, false);
+	}
+}
+
+void AODBossEntrance::StartWalkPhase(EWalkPhase Phase)
+{
+	UWorld* World = GetWorld();
+	const ACharacter* Character = Cast<ACharacter>(EnteringPawn.Get());
+	if (!World || !IsValid(Character))
+	{
+		return;
+	}
+
+	WalkPhase = Phase;
+	WalkPhaseStartTime = World->GetTimeSeconds();
+
+	// 막힘 등으로 도착하지 못할 때를 대비한 제한 시간
+	const UCharacterMovementComponent* MoveComp = Character->GetCharacterMovement();
+	const float Speed = MoveComp ? FMath::Max(MoveComp->GetMaxSpeed(), 50.0f) : 500.0f;
+	const FVector Target = (Phase == EWalkPhase::WalkIn) ? RoomPoint->GetComponentLocation() : EntryPoint->GetComponentLocation();
+	WalkPhaseTimeout = static_cast<float>(FVector::Dist2D(Character->GetActorLocation(), Target) / Speed) + 1.5f;
+
+	SetActorTickEnabled(true);
+}
+
+void AODBossEntrance::StopWalk()
+{
+	WalkPhase = EWalkPhase::None;
+	SetActorTickEnabled(false);
+}
+
+void AODBossEntrance::UpdateWalk(float DeltaSeconds)
+{
+	ACharacter* Character = Cast<ACharacter>(EnteringPawn.Get());
+	UWorld* World = GetWorld();
+	if (!IsValid(Character) || !World || WalkPhase == EWalkPhase::None)
+	{
+		StopWalk();
+		return;
+	}
+
+	const bool bTimedOut = World->GetTimeSeconds() - WalkPhaseStartTime > WalkPhaseTimeout;
+
+	switch (WalkPhase)
+	{
+	case EWalkPhase::Approach:
+	case EWalkPhase::WalkIn:
+	{
+		const FVector Target = (WalkPhase == EWalkPhase::WalkIn) ? RoomPoint->GetComponentLocation() : EntryPoint->GetComponentLocation();
+		const FVector ToTarget = (Target - Character->GetActorLocation()) * FVector(1.0, 1.0, 0.0);
+		// 프레임이 끊겨 한 걸음이 커지면 목표를 지나칠 수 있다. 가까이서 목표와 멀어지는 쪽으로 움직이면 도착으로 본다. (되돌아오며 몸이 뒤로 도는 것 방지)
+		const bool bPassedTarget = ToTarget.Size() < 80.0 && FVector::DotProduct(ToTarget, Character->GetVelocity() * FVector(1.0, 1.0, 0.0)) < 0.0;
+		if (ToTarget.Size() <= ArriveTolerance || bPassedTarget || bTimedOut)
+		{
+			if (WalkPhase == EWalkPhase::Approach)
+			{
+				// 정면 지점에 정확히 맞추고 멈춘 뒤 문 쪽으로 돈다.
+				if (UCharacterMovementComponent* MoveComp = Character->GetCharacterMovement())
+				{
+					MoveComp->StopMovementImmediately();
+				}
+				Character->SetActorLocation(FVector(Target.X, Target.Y, Character->GetActorLocation().Z), true);
+				WalkPhase = EWalkPhase::Turn;
+				WalkPhaseStartTime = World->GetTimeSeconds();
+				WalkPhaseTimeout = 2.0f;
+			}
+			else
+			{
+				// 방 안 도착: 입력을 끊으면 이동 컴포넌트의 감속으로 자연스럽게 멈춘다.
+				StopWalk();
+			}
+			return;
+		}
+		// 실제 이동 입력이라 이동 방향으로 몸이 돌고 걷기 애니메이션이 재생된다.
+		// 목표 가까이에서는 입력 세기를 줄여(아날로그 입력 = 최대 속도 비례) 걷기로 감속하며 멈춘다. 지나쳐서 맴도는 것을 막는다.
+		constexpr double SlowRadius = 150.0;
+		const float InputScale = static_cast<float>(FMath::Clamp(ToTarget.Size() / SlowRadius, 0.25, 1.0));
+		Character->AddMovementInput(ToTarget.GetSafeNormal(), InputScale);
+		return;
+	}
+	case EWalkPhase::Turn:
+	{
+		const float DoorYaw = static_cast<float>(EntryPoint->GetComponentRotation().Yaw);
+		const FRotator Current = Character->GetActorRotation();
+		const FRotator Wanted(0.0f, DoorYaw, 0.0f);
+		const FRotator Next = FMath::RInterpConstantTo(Current, Wanted, DeltaSeconds, TurnRate);
+		Character->SetActorRotation(Next);
+		if (FMath::Abs(FRotator::NormalizeAxis(Next.Yaw - DoorYaw)) < 1.0f || bTimedOut)
+		{
+			Character->SetActorRotation(Wanted);
+			StopWalk();
+			StartEntrySequence();
+		}
+		return;
+	}
+	default:
+		StopWalk();
+		return;
 	}
 }
 
@@ -266,38 +369,6 @@ void AODBossEntrance::FinishEntry()
 	OnEntered.Broadcast(Pawn);
 }
 
-void AODBossEntrance::MoveCharacterTo(ACharacter* Character, const FVector& GroundTarget, float Duration) const
-{
-	UCharacterMovementComponent* MoveComp = IsValid(Character) ? Character->GetCharacterMovement() : nullptr;
-	if (!MoveComp)
-	{
-		return;
-	}
-
-	const FVector Start = Character->GetActorLocation();
-	const FVector Target(GroundTarget.X, GroundTarget.Y, Start.Z);
-	const FVector Direction = (Target - Start).GetSafeNormal2D();
-	if (!Direction.IsNearlyZero())
-	{
-		Character->SetActorRotation(Direction.Rotation());
-	}
-
-	MoveComp->RemoveRootMotionSource(ODBossEntrance::WalkSourceName);
-
-	// 이동 속도만큼 속도가 생기므로 이동 애니메이션(조깅)이 자연스럽게 재생된다.
-	TSharedPtr<FRootMotionSource_MoveToForce> MoveTo = MakeShared<FRootMotionSource_MoveToForce>();
-	MoveTo->InstanceName = ODBossEntrance::WalkSourceName;
-	MoveTo->AccumulateMode = ERootMotionAccumulateMode::Override;
-	MoveTo->Priority = 900;
-	MoveTo->StartLocation = Start;
-	MoveTo->TargetLocation = Target;
-	MoveTo->Duration = FMath::Max(Duration, 0.05f);
-	MoveTo->bRestrictSpeedToExpected = true;
-	MoveTo->FinishVelocityParams.Mode = ERootMotionFinishVelocityMode::SetVelocity;
-	MoveTo->FinishVelocityParams.SetVelocity = FVector::ZeroVector;
-	MoveComp->ApplyRootMotionSource(MoveTo);
-}
-
 void AODBossEntrance::AnimateDoor(float TargetAlpha)
 {
 	UWorld* World = GetWorld();
@@ -344,6 +415,7 @@ void AODBossEntrance::ResetForTest()
 		World->GetTimerManager().ClearTimer(WalkTimer);
 		World->GetTimerManager().ClearTimer(FinishTimer);
 	}
+	StopWalk();
 	if (IsValid(SequencePlayer))
 	{
 		SequencePlayer->OnFinished.RemoveDynamic(this, &ThisClass::OnSequenceFinished);
@@ -366,7 +438,6 @@ void AODBossEntrance::ResetForTest()
 	{
 		if (UCharacterMovementComponent* MoveComp = Character->GetCharacterMovement())
 		{
-			MoveComp->RemoveRootMotionSource(ODBossEntrance::WalkSourceName);
 			MoveComp->StopMovementImmediately();
 		}
 		const float HalfHeight = Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
