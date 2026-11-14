@@ -61,6 +61,28 @@ FVector UODGameplayAbility::GetMovementInputDirection(float DeadZone) const
 	return Input.GetSafeNormal2D();
 }
 
+FVector UODGameplayAbility::GetAimDirection(float DeadZone) const
+{
+	const AODCharacterBase* Character = GetODCharacterFromActorInfo();
+	if (!IsValid(Character))
+	{
+		return FVector::ZeroVector;
+	}
+
+	// 대상이 있으면(플레이어 락온, 적 AI의 공격 대상) 대상을 향한다.
+	if (const AActor* AimTarget = Character->GetLockOnTarget(); IsValid(AimTarget))
+	{
+		FVector ToTarget = AimTarget->GetActorLocation() - Character->GetActorLocation();
+		ToTarget.Z = 0.0f;
+		if (!ToTarget.IsNearlyZero())
+		{
+			return ToTarget.GetSafeNormal2D();
+		}
+	}
+
+	return GetMovementInputDirection(DeadZone);
+}
+
 void UODGameplayAbility::OnGiveAbility(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec)
 {
 	Super::OnGiveAbility(ActorInfo, Spec);

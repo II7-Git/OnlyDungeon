@@ -67,6 +67,12 @@ protected:
 	FVector GetMovementInputDirection(float DeadZone = 0.1f) const;
 
 	/**
+	 * 공격·방어가 향할 방향 (월드 기준, Z 제거·정규화). 정할 방향이 없으면 ZeroVector.
+	 * 락온(또는 AI) 대상이 있으면 대상 방향, 없으면 이동 입력 방향이다.
+	 */
+	FVector GetAimDirection(float DeadZone = 0.1f) const;
+
+	/**
 	 * 몽타주의 캔슬 구간 노티파이(Event.Montage.CancelWindow)를 듣기 시작한다.
 	 * 구간 동안 State.Cancelable이 붙어, 회피·다른 행동·이동 입력이 이 어빌리티를 끊을 수 있다. (ASC·플레이어가 처리)
 	 * 행동 어빌리티의 ActivateAbility에서 몽타주 재생 전에 호출한다.

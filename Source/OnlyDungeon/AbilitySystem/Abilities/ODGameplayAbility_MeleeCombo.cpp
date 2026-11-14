@@ -261,10 +261,11 @@ void UODGameplayAbility_MeleeCombo::RotateToInputDirection() const
 		return;
 	}
 
-	const FVector InputDirection = GetMovementInputDirection();
-	if (!InputDirection.IsZero())
+	// 락온 중이면 대상 방향, 아니면 입력 방향
+	const FVector AimDirection = GetAimDirection();
+	if (!AimDirection.IsZero())
 	{
-		Character->SetActorRotation(InputDirection.Rotation());
+		Character->SetActorRotation(AimDirection.Rotation());
 	}
 }
 

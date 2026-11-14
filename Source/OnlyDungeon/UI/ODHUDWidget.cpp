@@ -6,6 +6,7 @@
 #include "AbilitySystemGlobals.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Blueprint/WidgetTree.h"
 #include "Brushes/SlateColorBrush.h"
 #include "Components/Border.h"
@@ -25,6 +26,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Styling/CoreStyle.h"
 #include "TimerManager.h"
@@ -33,6 +35,7 @@
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "Character/ODCharacterBase.h"
 #include "Character/ODCombatModeComponent.h"
+#include "Character/ODLockOnComponent.h"
 #include "Interaction/ODInteractionComponent.h"
 #include "Core/ODGameplayTags.h"
 #include "Equipment/ODEquipmentComponent.h"
@@ -47,6 +50,7 @@ namespace ODHUD
 
 	constexpr float LagTickInterval = 1.0f / 30.0f;
 	constexpr float DebugTickInterval = 0.1f;
+	constexpr float LockOnMarkerInterval = 1.0f / 60.0f;
 
 	FSlateFontInfo Font(int32 Size)
 	{
@@ -308,6 +312,22 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 		Prompt->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
+	// ---- 락온 표식 (대상 위, 마름모) ----
+	{
+		UBorder* Marker = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("LockOnMarker"));
+		LockOnMarker = Marker;
+		Marker->SetBrushColor(FLinearColor(1.0f, 1.0f, 1.0f, 0.9f));
+		Marker->SetRenderTransformPivot(FVector2D(0.5, 0.5));
+		Marker->SetRenderTransformAngle(45.0f);
+		if (UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(Marker))
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.0f, 0.0f));
+			CanvasSlot->SetAlignment(FVector2D(0.5, 0.5));
+			CanvasSlot->SetSize(FVector2D(10.0, 10.0));
+		}
+		Marker->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	// ---- 오른쪽 위: 테스트 정보 ----
 	{
 		UBorder* Panel = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DebugPanel"));
@@ -357,6 +377,7 @@ void UODHUDWidget::NativeDestruct()
 		TimerManager.ClearTimer(DebugTimer);
 		TimerManager.ClearTimer(TargetHideTimer);
 		TimerManager.ClearTimer(FailureHideTimer);
+		TimerManager.ClearTimer(LockOnMarkerTimer);
 	}
 	ClearTarget();
 	UnbindFromASC();
@@ -402,6 +423,12 @@ void UODHUDWidget::BindPawnComponents(APawn* Pawn)
 		Interaction->OnFocusChanged.AddUniqueDynamic(this, &ThisClass::HandleInteractionFocusChanged);
 		HandleInteractionFocusChanged(Interaction->GetFocusedActor());
 	}
+	if (UODLockOnComponent* LockOn = Pawn->FindComponentByClass<UODLockOnComponent>())
+	{
+		ObservedLockOn = LockOn;
+		LockOn->OnTargetChanged.AddUniqueDynamic(this, &ThisClass::HandleLockOnTargetChanged);
+		HandleLockOnTargetChanged(LockOn->GetTarget());
+	}
 }
 
 void UODHUDWidget::UnbindPawnComponents()
@@ -414,8 +441,77 @@ void UODHUDWidget::UnbindPawnComponents()
 	{
 		Interaction->OnFocusChanged.RemoveDynamic(this, &ThisClass::HandleInteractionFocusChanged);
 	}
+	if (UODLockOnComponent* LockOn = ObservedLockOn.Get())
+	{
+		LockOn->OnTargetChanged.RemoveDynamic(this, &ThisClass::HandleLockOnTargetChanged);
+	}
 	ObservedModeComponent.Reset();
 	ObservedInteraction.Reset();
+	ObservedLockOn.Reset();
+	HandleLockOnTargetChanged(nullptr);
+}
+
+void UODHUDWidget::HandleLockOnTargetChanged(AActor* NewTarget)
+{
+	UWorld* World = GetWorld();
+	const bool bLockedOn = IsValid(NewTarget);
+
+	if (bLockedOn)
+	{
+		// 락온 중에는 대상 바를 락온 대상에 고정한다. (숨김 예약 취소)
+		SetTarget(NewTarget);
+		if (World)
+		{
+			World->GetTimerManager().ClearTimer(TargetHideTimer);
+			World->GetTimerManager().SetTimer(LockOnMarkerTimer, FTimerDelegate::CreateUObject(this, &ThisClass::UpdateLockOnMarker), ODHUD::LockOnMarkerInterval, true);
+		}
+		UpdateLockOnMarker();
+		return;
+	}
+
+	if (World)
+	{
+		World->GetTimerManager().ClearTimer(LockOnMarkerTimer);
+	}
+	if (IsValid(LockOnMarker))
+	{
+		LockOnMarker->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	// 락온이 풀리면 대상 바는 평소처럼 잠시 뒤 숨긴다.
+	if (Target.IsValid())
+	{
+		StartTargetHideTimer();
+	}
+}
+
+void UODHUDWidget::UpdateLockOnMarker()
+{
+	if (!IsValid(LockOnMarker))
+	{
+		return;
+	}
+
+	const UODLockOnComponent* LockOn = ObservedLockOn.Get();
+	const APawn* Pawn = ObservedPawn.Get();
+	APlayerController* PC = IsValid(Pawn) ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	UCanvasPanelSlot* MarkerSlot = Cast<UCanvasPanelSlot>(LockOnMarker->Slot);
+
+	FVector2D ScreenPosition = FVector2D::ZeroVector;
+	const bool bVisible = LockOn && LockOn->IsLockedOn() && PC && MarkerSlot
+		&& UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(PC, LockOn->GetTargetAimLocation(), ScreenPosition, false);
+	if (bVisible)
+	{
+		MarkerSlot->SetPosition(ScreenPosition);
+	}
+	LockOnMarker->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+}
+
+void UODHUDWidget::StartTargetHideTimer()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(TargetHideTimer, FTimerDelegate::CreateUObject(this, &ThisClass::ClearTarget), TargetHideDelay, false);
+	}
 }
 
 void UODHUDWidget::HandleCinematicChanged(bool bInCinematic)
@@ -618,12 +714,14 @@ void UODHUDWidget::HandleMeleeHit(const FGameplayEventData* Payload)
 		return;
 	}
 
-	SetTarget(HitActor);
-
-	if (UWorld* World = GetWorld())
+	// 락온 중에는 대상 바가 락온 대상에 고정되어 있으므로 바꾸지 않는다.
+	if (const UODLockOnComponent* LockOn = ObservedLockOn.Get(); LockOn && LockOn->IsLockedOn())
 	{
-		World->GetTimerManager().SetTimer(TargetHideTimer, FTimerDelegate::CreateUObject(this, &ThisClass::ClearTarget), TargetHideDelay, false);
+		return;
 	}
+
+	SetTarget(HitActor);
+	StartTargetHideTimer();
 }
 
 void UODHUDWidget::SetTarget(AActor* NewTarget)

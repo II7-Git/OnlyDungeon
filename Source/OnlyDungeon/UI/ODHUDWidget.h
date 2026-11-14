@@ -12,6 +12,7 @@ class UAbilitySystemComponent;
 class UCanvasPanel;
 class UODCombatModeComponent;
 class UODInteractionComponent;
+class UODLockOnComponent;
 class UGameplayAbility;
 class UProgressBar;
 class USizeBox;
@@ -33,7 +34,8 @@ struct FODHUDBarState
  * 플레이어 HUD. 다크소울 배치를 따른다.
  * - 왼쪽 위: 체력(빨강)·스태미나(초록) 바. 길이는 최대치에 비례하고, 체력은 깎인 부분이 잠시 남았다가 줄어든다.
  * - 왼쪽 아래: 장비 십자 슬롯 (오른손 = 현재 무기)
- * - 아래 가운데: 대상 체력 바 (마지막으로 때린 적, 일정 시간 뒤 숨김)
+ * - 아래 가운데: 대상 체력 바 (마지막으로 때린 적, 일정 시간 뒤 숨김. 락온 중에는 락온 대상으로 고정)
+ * - 락온 대상 위: 락온 표식 (락온 중에만 타이머로 화면 위치 갱신)
  * - 아래 가운데(대상 바 위): 상호작용 안내 ("F  보스방 입장")
  * - 컷신 중에는 HUD 전체를 숨긴다. (전투 모드 컴포넌트의 OnCinematicChanged)
  * - 오른쪽 위: 테스트 정보 (상태 태그, 몽타주·섹션, 강인도, 최근 발동 실패 원인). 콘솔 OD.Debug.HUD 0/1
@@ -99,6 +101,10 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> InteractionText;
+
+	/** 락온 대상 위에 띄우는 표식 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> LockOnMarker;
 
 	/** 상호작용 키 표시 (키 설정 화면이 생기면 입력 매핑에서 가져온다) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|HUD|Interaction")
@@ -182,6 +188,15 @@ private:
 	UFUNCTION()
 	void HandleInteractionFocusChanged(AActor* NewFocus);
 
+	UFUNCTION()
+	void HandleLockOnTargetChanged(AActor* NewTarget);
+
+	/** 락온 표식을 대상의 화면 위치로 옮긴다. */
+	void UpdateLockOnMarker();
+
+	/** 대상 바를 TargetHideDelay 뒤에 숨기도록 예약한다. */
+	void StartTargetHideTimer();
+
 	void BindPawnComponents(APawn* Pawn);
 	void UnbindPawnComponents();
 	void HandleMeleeHit(const FGameplayEventData* Payload);
@@ -189,6 +204,7 @@ private:
 	TWeakObjectPtr<APawn> ObservedPawn;
 	TWeakObjectPtr<UODCombatModeComponent> ObservedModeComponent;
 	TWeakObjectPtr<UODInteractionComponent> ObservedInteraction;
+	TWeakObjectPtr<UODLockOnComponent> ObservedLockOn;
 	TWeakObjectPtr<UAbilitySystemComponent> ObservedASC;
 	TArray<TPair<FGameplayAttribute, FDelegateHandle>> PlayerAttributeHandles;
 	FDelegateHandle FailureHandle;
@@ -206,6 +222,7 @@ private:
 	FTimerHandle DebugTimer;
 	FTimerHandle TargetHideTimer;
 	FTimerHandle FailureHideTimer;
+	FTimerHandle LockOnMarkerTimer;
 
 	TWeakObjectPtr<const UObject> LastWeaponData;
 };

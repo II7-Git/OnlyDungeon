@@ -21,6 +21,7 @@
 #include "Engine/Engine.h"
 #include "Input/ODInputConfig.h"
 #include "Character/ODCombatModeComponent.h"
+#include "Character/ODLockOnComponent.h"
 #include "Interaction/ODInteractionComponent.h"
 #include "World/ODBossEntrance.h"
 
@@ -52,6 +53,7 @@ AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializ
 
 	CombatModeComponent = CreateDefaultSubobject<UODCombatModeComponent>(TEXT("CombatMode"));
 	InteractionComponent = CreateDefaultSubobject<UODInteractionComponent>(TEXT("Interaction"));
+	LockOnComponent = CreateDefaultSubobject<UODLockOnComponent>(TEXT("LockOn"));
 }
 
 void AODPlayerCharacter::NotifyControllerChanged()
@@ -127,6 +129,12 @@ void AODPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 		EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &ThisClass::Input_Interact);
 	}
 
+	// 락온 전환
+	if (const UInputAction* LockOnAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_LockOn, false))
+	{
+		EIC->BindAction(LockOnAction, ETriggerEvent::Started, this, &ThisClass::Input_LockOn);
+	}
+
 	// 어빌리티: 누름/뗌을 InputTag와 함께 ASC로 전달
 	for (const FODInputAction& Action : InputConfig->AbilityInputActions)
 	{
@@ -185,6 +193,12 @@ void AODPlayerCharacter::Input_Look(const FInputActionValue& Value)
 		return;
 	}
 
+	// 락온 중에는 카메라가 대상을 따라가므로 마우스 시점 입력을 받지 않는다.
+	if (IsValid(LockOnComponent) && LockOnComponent->IsLockedOn())
+	{
+		return;
+	}
+
 	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
@@ -212,6 +226,19 @@ void AODPlayerCharacter::Input_Interact()
 	{
 		InteractionComponent->TryInteract();
 	}
+}
+
+void AODPlayerCharacter::Input_LockOn()
+{
+	if (IsValid(LockOnComponent) && !IsDead())
+	{
+		LockOnComponent->ToggleLockOn();
+	}
+}
+
+AActor* AODPlayerCharacter::GetLockOnTarget() const
+{
+	return IsValid(LockOnComponent) ? LockOnComponent->GetTarget() : nullptr;
 }
 
 void AODPlayerCharacter::Input_Debug_SwapWeapon()

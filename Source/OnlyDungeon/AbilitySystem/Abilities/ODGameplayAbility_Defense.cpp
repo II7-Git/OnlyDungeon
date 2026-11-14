@@ -36,10 +36,10 @@ void UODGameplayAbility_Defense::ActivateAbility(const FGameplayAbilitySpecHandl
 	if (bRotateToInput)
 	{
 		AODCharacterBase* Character = GetODCharacterFromActorInfo();
-		const FVector InputDirection = GetMovementInputDirection();
-		if (IsValid(Character) && !InputDirection.IsZero())
+		const FVector AimDirection = GetAimDirection();
+		if (IsValid(Character) && !AimDirection.IsZero())
 		{
-			Character->SetActorRotation(InputDirection.Rotation());
+			Character->SetActorRotation(AimDirection.Rotation());
 		}
 	}
 

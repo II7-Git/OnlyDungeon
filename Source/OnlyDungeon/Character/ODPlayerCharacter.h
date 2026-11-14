@@ -14,6 +14,7 @@ class UODInputConfig;
 class UODWeaponData;
 class UODCombatModeComponent;
 class UODInteractionComponent;
+class UODLockOnComponent;
 struct FInputActionValue;
 
 /**
@@ -21,6 +22,7 @@ struct FInputActionValue;
  * - 이동/시점은 C++ 함수로, 그 외 행동은 InputTag → ASC로 전달해 어빌리티가 처리한다.
  * - 카메라·입력 매핑·이동 기준 방향은 전투 모드 컴포넌트(필드 쿼터뷰 / 보스 3인칭)가 정한다.
  * - 상호작용 키는 상호작용 컴포넌트의 포커스 대상(문 등)에 전달한다.
+ * - 락온 키는 락온 컴포넌트에 전달한다. 락온 중에는 마우스로 시점을 돌리지 않는다.
  */
 UCLASS(Abstract)
 class ONLYDUNGEON_API AODPlayerCharacter : public AODCharacterBase
@@ -34,6 +36,10 @@ public:
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	UODCombatModeComponent* GetCombatModeComponent() const { return CombatModeComponent; }
 	UODInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
+	UODLockOnComponent* GetLockOnComponent() const { return LockOnComponent; }
+
+	/** 락온 컴포넌트가 잡고 있는 대상 (없으면 nullptr) */
+	virtual AActor* GetLockOnTarget() const override;
 
 	/** 이동이 막힌 동안(공격 중)에도 최근 0.2초 안에 누른 방향을 돌려준다. */
 	virtual FVector GetDesiredMoveDirection() const override;
@@ -47,6 +53,7 @@ protected:
 	void Input_AbilityPressed(FGameplayTag InputTag);
 	void Input_AbilityReleased(FGameplayTag InputTag);
 	void Input_Interact();
+	void Input_LockOn();
 
 	/** [테스트] 무기 교체 (TestWeapons를 순서대로) */
 	void Input_Debug_SwapWeapon();
@@ -69,6 +76,10 @@ protected:
 	/** 상호작용 대상 관리 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Interaction")
 	TObjectPtr<UODInteractionComponent> InteractionComponent;
+
+	/** 락온 (보스 모드 대상 고정) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|LockOn")
+	TObjectPtr<UODLockOnComponent> LockOnComponent;
 
 	/** 입력 액션 ↔ InputTag 매핑 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Input")
