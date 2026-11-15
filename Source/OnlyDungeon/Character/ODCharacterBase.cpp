@@ -3,7 +3,10 @@
 #include "ODCharacterBase.h"
 
 #include "Abilities/GameplayAbilityTypes.h"
+#include "Animation/AnimInstance.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Combat.h"
@@ -103,12 +106,22 @@ void AODCharacterBase::InitializeAbilitySystem()
 
 void AODCharacterBase::ResetForTest()
 {
+	Revive();
+}
+
+void AODCharacterBase::Revive()
+{
 	if (!IsValid(AbilitySystemComponent))
 	{
 		return;
 	}
 
+	// 사망 연출(어빌리티·몽타주)을 포함해 진행 중인 행동을 모두 끊는다.
 	AbilitySystemComponent->CancelAllAbilities();
+	if (UAnimInstance* AnimInstance = IsValid(GetMesh()) ? GetMesh()->GetAnimInstance() : nullptr)
+	{
+		AnimInstance->StopAllMontages(0.1f);
+	}
 	AbilitySystemComponent->ClearAbilityInput();
 	AbilitySystemComponent->SetLooseGameplayTagCount(ODGameplayTags::State_Dead, 0);
 
@@ -132,7 +145,19 @@ void AODCharacterBase::ResetForTest()
 		}
 	}
 
-	UE_LOG(LogOD, Log, TEXT("%s 테스트 초기화"), *GetNameSafe(this));
+	// 사망 때 끈 이동·충돌 복구
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement(); IsValid(Movement))
+	{
+		Movement->StopMovementImmediately();
+		Movement->SetMovementMode(MOVE_Walking);
+	}
+	if (bDeathCollisionApplied && IsValid(GetCapsuleComponent()))
+	{
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, SavedPawnResponse);
+		bDeathCollisionApplied = false;
+	}
+
+	UE_LOG(LogOD, Log, TEXT("%s 부활"), *GetNameSafe(this));
 }
 
 void AODCharacterBase::HandleOutOfHealth(AActor* DamageInstigator)
@@ -147,6 +172,19 @@ void AODCharacterBase::HandleOutOfHealth(AActor* DamageInstigator)
 	AbilitySystemComponent->AddLooseGameplayTag(ODGameplayTags::State_Dead);
 	AbilitySystemComponent->ClearAbilityInput();
 	AbilitySystemComponent->CancelAllAbilities();
+
+	// 쓰러진 자리에 멈추고, 다른 캐릭터가 시체를 밀거나 막히지 않게 Pawn 충돌을 끈다. (부활 때 복구)
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement(); IsValid(Movement))
+	{
+		Movement->StopMovementImmediately();
+		Movement->DisableMovement();
+	}
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent(); IsValid(Capsule) && !bDeathCollisionApplied)
+	{
+		SavedPawnResponse = Capsule->GetCollisionResponseToChannel(ECC_Pawn);
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		bDeathCollisionApplied = true;
+	}
 
 	FGameplayEventData Payload;
 	Payload.EventTag = ODGameplayTags::Event_Death;

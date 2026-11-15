@@ -57,9 +57,14 @@ public:
 	FText GetDisplayName() const;
 
 	/**
-	 * [테스트용] 상태 초기화: 사망 해제, 기본 어빌리티 세트 재부여(초기 수치 GE 포함), 현재 무기 재장착.
-	 * 테스트 맵의 초기화 키에서 사용한다. 실제 부활 처리는 이후 단계에서 별도로 만든다.
+	 * 부활(상태 초기화): 진행 중 행동·사망 연출 취소, 사망 해제, 기본 어빌리티 세트 재부여(초기 수치 GE·패시브 재발동),
+	 * 현재 무기 재장착, 이동·충돌 복구. 위치는 바꾸지 않는다. (옮기는 건 호출한 쪽: 게임 모드, 적의 ResetToSpawn)
+	 * 리스폰 포인트 휴식(회복)에도 쓴다.
 	 */
+	UFUNCTION(BlueprintCallable, Category = "OD|Character")
+	virtual void Revive();
+
+	/** [테스트용] 상태 초기화. 테스트 맵의 초기화 키(F5)에서 사용한다. (= Revive) */
 	UFUNCTION(BlueprintCallable, Category = "OD|Test")
 	virtual void ResetForTest();
 
@@ -110,4 +115,8 @@ protected:
 
 private:
 	bool bAbilitySystemInitialized = false;
+
+	/** 사망 시 끄기 전의 캡슐 Pawn 채널 응답 (부활 때 복구) */
+	TEnumAsByte<ECollisionResponse> SavedPawnResponse = ECR_Block;
+	bool bDeathCollisionApplied = false;
 };

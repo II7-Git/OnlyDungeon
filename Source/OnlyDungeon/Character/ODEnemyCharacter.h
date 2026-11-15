@@ -12,6 +12,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FODEnemyCombatActiveSignature, AODE
 
 /**
  * 잡몹과 보스가 공통으로 상속하는 적 캐릭터.
+ * - 레벨 시작 위치를 기억했다가 플레이어 부활·휴식 때 그 자리로 돌아가 부활한다. (필드 서브시스템에 스스로 등록)
  * - 전투 활성 상태: bStartDormant면 대기 상태로 시작해 ActivateCombat()이 불릴 때까지 싸우지 않는다. (보스는 플레이어 입장 후 활성화)
  * AI(StateTree) 연결과 보스 페이즈 처리는 이후 단계에서 추가한다.
  */
@@ -34,7 +35,14 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Enemy")
 	bool IsCombatActive() const { return bCombatActive; }
 
-	/** 초기화 시 전투 활성 상태도 시작 상태(bStartDormant)로 되돌린다. */
+	/** 부활 시 전투 활성 상태도 시작 상태(bStartDormant)로 되돌린다. */
+	virtual void Revive() override;
+
+	/** 레벨 시작 위치로 돌아가 부활한다. (플레이어 부활·휴식 시 필드 서브시스템이 호출) */
+	UFUNCTION(BlueprintCallable, Category = "OD|Enemy")
+	void ResetToSpawn();
+
+	/** 테스트 초기화(F5)도 시작 위치로 돌아간다. */
 	virtual void ResetForTest() override;
 
 	/** 전투 활성 상태가 바뀔 때 */
@@ -43,6 +51,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/** 전투 활성 상태가 바뀐 직후 (AI 시작·정지 등 파생 클래스 처리) */
 	virtual void HandleCombatActiveChanged(bool bNewActive);
@@ -55,4 +64,5 @@ private:
 	void SetCombatActive(bool bNewActive);
 
 	bool bCombatActive = true;
+	FTransform SpawnTransform = FTransform::Identity;
 };

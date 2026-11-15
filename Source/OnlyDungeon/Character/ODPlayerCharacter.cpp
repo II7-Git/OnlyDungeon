@@ -24,6 +24,7 @@
 #include "Character/ODLockOnComponent.h"
 #include "Interaction/ODInteractionComponent.h"
 #include "World/ODBossEntrance.h"
+#include "Core/ODGameMode.h"
 
 AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -266,6 +267,19 @@ void AODPlayerCharacter::Input_Debug_SwapWeapon()
 
 void AODPlayerCharacter::Input_Debug_Reset()
 {
+	// OD 게임 모드면 부활과 같은 경로로 초기화한다. (예약된 부활 취소 → 플레이어 회복 → 보스전·입구·적 초기화)
+	if (AODGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AODGameMode>() : nullptr)
+	{
+		GameMode->CancelPendingRespawn();
+		ResetForTest();
+		GameMode->ResetWorldState();
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[테스트] 모든 캐릭터 상태 초기화"));
+		}
+		return;
+	}
+
 	for (TActorIterator<AODCharacterBase> It(GetWorld()); It; ++It)
 	{
 		if (IsValid(*It))

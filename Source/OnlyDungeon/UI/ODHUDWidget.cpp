@@ -296,6 +296,20 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 		Panel->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
+	// ---- 가운데: 사망 문구 ----
+	{
+		DeathText = MakeText(Tree, 48, FLinearColor(0.6f, 0.05f, 0.04f), TEXT("DeathText"));
+		DeathText->SetText(NSLOCTEXT("OnlyDungeon", "HUDDeath", "사망"));
+		DeathText->SetJustification(ETextJustify::Center);
+		if (UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(DeathText))
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+			CanvasSlot->SetAlignment(FVector2D(0.5, 0.5));
+			CanvasSlot->SetAutoSize(true);
+		}
+		DeathText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	// ---- 아래 가운데: 상호작용 안내 ----
 	{
 		UBorder* Prompt = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("InteractionPrompt"));
@@ -473,6 +487,11 @@ void UODHUDWidget::BindPawnComponents(APawn* Pawn)
 		Interaction->OnFocusChanged.AddUniqueDynamic(this, &ThisClass::HandleInteractionFocusChanged);
 		HandleInteractionFocusChanged(Interaction->GetFocusedActor());
 	}
+	if (AODCharacterBase* Character = Cast<AODCharacterBase>(Pawn))
+	{
+		Character->OnDeath.AddUniqueDynamic(this, &ThisClass::HandleObservedPawnDeath);
+	}
+	RefreshDeathText();
 	if (UODLockOnComponent* LockOn = Pawn->FindComponentByClass<UODLockOnComponent>())
 	{
 		ObservedLockOn = LockOn;
@@ -481,8 +500,28 @@ void UODHUDWidget::BindPawnComponents(APawn* Pawn)
 	}
 }
 
+void UODHUDWidget::HandleObservedPawnDeath(AODCharacterBase* DeadCharacter)
+{
+	RefreshDeathText();
+}
+
+void UODHUDWidget::RefreshDeathText()
+{
+	if (!IsValid(DeathText))
+	{
+		return;
+	}
+	const AODCharacterBase* Character = Cast<AODCharacterBase>(ObservedPawn.Get());
+	const bool bDead = IsValid(Character) && Character->IsDead();
+	DeathText->SetVisibility(bDead ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+}
+
 void UODHUDWidget::UnbindPawnComponents()
 {
+	if (AODCharacterBase* Character = Cast<AODCharacterBase>(ObservedPawn.Get()))
+	{
+		Character->OnDeath.RemoveDynamic(this, &ThisClass::HandleObservedPawnDeath);
+	}
 	if (UODCombatModeComponent* ModeComponent = ObservedModeComponent.Get())
 	{
 		ModeComponent->OnCinematicChanged.RemoveDynamic(this, &ThisClass::HandleCinematicChanged);
@@ -658,6 +697,9 @@ void UODHUDWidget::RefreshPlayerBars()
 		ASC->GetNumericAttribute(UODAttributeSet_Combat::GetStaminaAttribute()),
 		ASC->GetNumericAttribute(UODAttributeSet_Combat::GetMaxStaminaAttribute()),
 		StaminaFill, nullptr, StaminaBox, StaminaText, false);
+
+	// 부활하면 초기 수치 GE로 체력이 바뀌므로 여기서 사망 문구를 내린다.
+	RefreshDeathText();
 }
 
 void UODHUDWidget::ApplyBar(FODHUDBarState& State, float NewCurrent, float NewMax, UProgressBar* Fill, UProgressBar* Lag, USizeBox* Box, UTextBlock* ValueText, bool bUseLag)

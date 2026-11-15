@@ -14,6 +14,7 @@ class UODCombatModeComponent;
 class UODInteractionComponent;
 class UODLockOnComponent;
 class AODEnemyCharacter;
+class AODCharacterBase;
 class UGameplayAbility;
 class UProgressBar;
 class USizeBox;
@@ -39,6 +40,7 @@ struct FODHUDBarState
  *   보스전 중에는 보스 이름·체력으로 고정된다. (보스전 서브시스템의 시작·종료 알림)
  * - 락온 대상 위: 락온 표식 (락온 중에만 타이머로 화면 위치 갱신)
  * - 아래 가운데(대상 바 위): 상호작용 안내 ("F  보스방 입장")
+ * - 가운데: 사망 문구 (플레이어가 죽어 있는 동안)
  * - 컷신 중에는 HUD 전체를 숨긴다. (전투 모드 컴포넌트의 OnCinematicChanged)
  * - 오른쪽 위: 테스트 정보 (상태 태그, 몽타주·섹션, 강인도, 최근 발동 실패 원인). 콘솔 OD.Debug.HUD 0/1
  *
@@ -103,6 +105,10 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> InteractionText;
+
+	/** 사망 문구 (가운데) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DeathText;
 
 	/** 락온 대상 위에 띄우는 표식 */
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -198,6 +204,12 @@ private:
 
 	UFUNCTION()
 	void HandleBossEncounterEnded(bool bVictory);
+
+	UFUNCTION()
+	void HandleObservedPawnDeath(AODCharacterBase* DeadCharacter);
+
+	/** 사망 문구를 관찰 중인 폰의 사망 여부에 맞춘다. */
+	void RefreshDeathText();
 
 	/** 락온 표식을 대상의 화면 위치로 옮긴다. */
 	void UpdateLockOnMarker();

@@ -3,7 +3,9 @@
 #include "ODEnemyCharacter.h"
 
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Core/ODFieldSubsystem.h"
 #include "Core/ODLogChannels.h"
+#include "Engine/World.h"
 
 AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -18,7 +20,28 @@ AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer
 void AODEnemyCharacter::BeginPlay()
 {
 	bCombatActive = !bStartDormant;
+	SpawnTransform = GetActorTransform();
 	Super::BeginPlay();
+
+	if (UODFieldSubsystem* Field = GetWorld() ? GetWorld()->GetSubsystem<UODFieldSubsystem>() : nullptr)
+	{
+		Field->RegisterEnemy(this);
+	}
+}
+
+void AODEnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UODFieldSubsystem* Field = GetWorld() ? GetWorld()->GetSubsystem<UODFieldSubsystem>() : nullptr)
+	{
+		Field->UnregisterEnemy(this);
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
+void AODEnemyCharacter::ResetToSpawn()
+{
+	Revive();
+	TeleportTo(SpawnTransform.GetLocation(), SpawnTransform.Rotator());
 }
 
 void AODEnemyCharacter::ActivateCombat()
@@ -48,8 +71,13 @@ void AODEnemyCharacter::HandleCombatActiveChanged(bool bNewActive)
 {
 }
 
+void AODEnemyCharacter::Revive()
+{
+	Super::Revive();
+	SetCombatActive(!bStartDormant);
+}
+
 void AODEnemyCharacter::ResetForTest()
 {
-	Super::ResetForTest();
-	SetCombatActive(!bStartDormant);
+	ResetToSpawn();
 }
