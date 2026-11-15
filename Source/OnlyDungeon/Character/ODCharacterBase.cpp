@@ -3,11 +3,17 @@
 #include "ODCharacterBase.h"
 
 #include "Abilities/GameplayAbilityTypes.h"
+#include "Animation/AnimInstance.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Combat.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
+#include "Equipment/ODEquipmentComponent.h"
+#include "Equipment/ODWeaponData.h"
 
 AODCharacterBase::AODCharacterBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -20,11 +26,27 @@ AODCharacterBase::AODCharacterBase(const FObjectInitializer& ObjectInitializer)
 	// 액터의 하위 오브젝트로 만든 AttributeSet은 ASC 초기화 시 자동으로 등록된다.
 	HealthSet = CreateDefaultSubobject<UODAttributeSet_Health>(TEXT("HealthSet"));
 	CombatSet = CreateDefaultSubobject<UODAttributeSet_Combat>(TEXT("CombatSet"));
+
+	EquipmentComponent = CreateDefaultSubobject<UODEquipmentComponent>(TEXT("EquipmentComponent"));
+
+	// 무기 판정이 화면 밖에서도 정확하도록, 보이지 않아도 본 위치를 갱신한다.
+	GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 }
 
 UAbilitySystemComponent* AODCharacterBase::GetAbilitySystemComponent() const
 {
 	return AbilitySystemComponent;
+}
+
+FText AODCharacterBase::GetDisplayName() const
+{
+	if (!DisplayName.IsEmpty())
+	{
+		return DisplayName;
+	}
+	FString ClassName = GetClass()->GetName();
+	ClassName.RemoveFromEnd(TEXT("_C"));
+	return FText::FromString(ClassName);
 }
 
 bool AODCharacterBase::IsDead() const
@@ -74,6 +96,78 @@ void AODCharacterBase::InitializeAbilitySystem()
 	{
 		UE_LOG(LogODAbility, Verbose, TEXT("%s: DefaultAbilitySet이 지정되지 않음"), *GetNameSafe(this));
 	}
+
+	// 무기 어빌리티 부여에 ASC가 필요하므로 초기화가 끝난 뒤 기본 무기를 장착한다.
+	if (IsValid(EquipmentComponent))
+	{
+		EquipmentComponent->EquipDefaultWeapon();
+	}
+}
+
+bool AODCharacterBase::IsHostileTo(const AActor* Other) const
+{
+	const AODCharacterBase* OtherCharacter = Cast<AODCharacterBase>(Other);
+	if (!OtherCharacter)
+	{
+		return Other != this;
+	}
+	return OtherCharacter != this && OtherCharacter->TeamId != TeamId;
+}
+
+void AODCharacterBase::ResetForTest()
+{
+	Revive();
+}
+
+void AODCharacterBase::Revive()
+{
+	if (!IsValid(AbilitySystemComponent))
+	{
+		return;
+	}
+
+	// 사망 연출(어빌리티·몽타주)을 포함해 진행 중인 행동을 모두 끊는다.
+	AbilitySystemComponent->CancelAllAbilities();
+	if (UAnimInstance* AnimInstance = IsValid(GetMesh()) ? GetMesh()->GetAnimInstance() : nullptr)
+	{
+		AnimInstance->StopAllMontages(0.1f);
+	}
+	AbilitySystemComponent->ClearAbilityInput();
+	AbilitySystemComponent->SetLooseGameplayTagCount(ODGameplayTags::State_Dead, 0);
+
+	// 기본 세트를 회수 후 다시 부여: 초기 수치 GE가 다시 적용되고 패시브(스태미나 회복)도 다시 발동한다.
+	DefaultAbilitySetHandles.TakeFromAbilitySystem(AbilitySystemComponent);
+	if (IsValid(DefaultAbilitySet))
+	{
+		DefaultAbilitySet->GiveToAbilitySystem(AbilitySystemComponent, &DefaultAbilitySetHandles, this);
+	}
+
+	// 무기 어빌리티도 다시 부여
+	if (IsValid(EquipmentComponent))
+	{
+		if (UODWeaponData* Weapon = EquipmentComponent->GetWeaponData())
+		{
+			EquipmentComponent->EquipWeapon(Weapon);
+		}
+		else
+		{
+			EquipmentComponent->EquipDefaultWeapon();
+		}
+	}
+
+	// 사망 때 끈 이동·충돌 복구
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement(); IsValid(Movement))
+	{
+		Movement->StopMovementImmediately();
+		Movement->SetMovementMode(MOVE_Walking);
+	}
+	if (bDeathCollisionApplied && IsValid(GetCapsuleComponent()))
+	{
+		GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, SavedPawnResponse);
+		bDeathCollisionApplied = false;
+	}
+
+	UE_LOG(LogOD, Log, TEXT("%s 부활"), *GetNameSafe(this));
 }
 
 void AODCharacterBase::HandleOutOfHealth(AActor* DamageInstigator)
@@ -88,6 +182,19 @@ void AODCharacterBase::HandleOutOfHealth(AActor* DamageInstigator)
 	AbilitySystemComponent->AddLooseGameplayTag(ODGameplayTags::State_Dead);
 	AbilitySystemComponent->ClearAbilityInput();
 	AbilitySystemComponent->CancelAllAbilities();
+
+	// 쓰러진 자리에 멈추고, 다른 캐릭터가 시체를 밀거나 막히지 않게 Pawn 충돌을 끈다. (부활 때 복구)
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement(); IsValid(Movement))
+	{
+		Movement->StopMovementImmediately();
+		Movement->DisableMovement();
+	}
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent(); IsValid(Capsule) && !bDeathCollisionApplied)
+	{
+		SavedPawnResponse = Capsule->GetCollisionResponseToChannel(ECC_Pawn);
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		bDeathCollisionApplied = true;
+	}
 
 	FGameplayEventData Payload;
 	Payload.EventTag = ODGameplayTags::Event_Death;

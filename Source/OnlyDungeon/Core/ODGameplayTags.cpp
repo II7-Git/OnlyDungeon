@@ -15,6 +15,9 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Skill_2, "InputTag.Skill.2", "스킬 2 (왼손 무기)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_LockOn, "InputTag.LockOn", "락온 전환");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_UseItem, "InputTag.UseItem", "회복 아이템 사용");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Interact, "InputTag.Interact", "상호작용 (문 등)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Debug_SwapWeapon, "InputTag.Debug.SwapWeapon", "[테스트] 무기 교체");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Debug_Reset, "InputTag.Debug.Reset", "[테스트] 모든 캐릭터 상태 초기화");
 
 	// ---------- 전투 모드 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_Field, "Mode.Field", "필드: 쿼터뷰 핵앤슬래시");
@@ -23,22 +26,34 @@ namespace ODGameplayTags
 	// ---------- 상태 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Dead, "State.Dead", "사망");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Attacking, "State.Attacking", "공격 중");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Cancelable, "State.Cancelable", "캔슬 구간: 지금 행동을 회피로 끊을 수 있음");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_ComboBranch, "State.ComboBranch", "약공 콤보에서 파생 공격(강공)으로 발동되는 중 (ASC가 발동 직전에만 잠시 부여)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Parrying, "State.Parrying", "패링 판정 구간 (이 동안 정면 공격을 받으면 패링 성공)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Dodging, "State.Dodging", "회피 중");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Defending, "State.Defending", "방어 중 (패링/가드)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Defending, "State.Defending", "가드 중 (정면 공격 피해 감소, 스태미나로 막음)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Stunned, "State.Stunned", "경직 (강인도 붕괴, 패링당함 등)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Invulnerable, "State.Invulnerable", "무적 (회피 무적 시간 등)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_LockOn, "State.LockOn", "락온 중");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_1, "State.Phase.1", "보스 1페이즈");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_2, "State.Phase.2", "보스 2페이즈 (체력이 일정 비율 이하)");
 
 	// ---------- 이벤트 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Hit, "Event.Hit", "피격됨");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Death, "Event.Death", "사망함");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_PoiseBroken, "Event.PoiseBroken", "강인도 붕괴");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_ParrySuccess, "Event.ParrySuccess", "패링 성공");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_GuardBlocked, "Event.GuardBlocked", "가드로 공격을 막음");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_HitTrace, "Event.Montage.HitTrace", "공격 몽타주의 판정 구간 (AnimNotify → 어빌리티)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Melee_Hit, "Event.Melee.Hit", "내 무기가 대상을 맞힘 (무기 → 공격 어빌리티)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_CancelWindow, "Event.Montage.CancelWindow", "캔슬 구간 (열림 1 / 닫힘 0, AnimNotify → 어빌리티)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combo_BranchInput, "Event.Combo.BranchInput", "공격 중 파생 공격 입력 (ASC → 진행 중인 콤보, InstigatorTags에 입력 태그)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Action, "Ability.Action", "공격·방어·회피처럼 캔슬 구간에서 끊길 수 있는 행동 어빌리티");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_ComboWindow, "Event.Montage.ComboWindow", "콤보 입력 구간 (열림 1 / 닫힘 0, AnimNotify → 어빌리티)");
 
 	// ---------- 데이터 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Damage, "Data.Damage", "SetByCaller: 기본 피해량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_PoiseDamage, "Data.PoiseDamage", "SetByCaller: 강인도 피해량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_StaminaRegen, "Data.StaminaRegen", "SetByCaller: 이번 회복 틱의 스태미나 회복량");
 
 	// ---------- 쿨다운 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Skill_1, "Cooldown.Skill.1", "스킬 1 쿨다운");

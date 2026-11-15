@@ -11,5 +11,6 @@ public class OnlyDungeonEditorTarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V8;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_9;
 		ExtraModuleNames.Add("OnlyDungeon");
+		ExtraModuleNames.Add("OnlyDungeonEditor");
 	}
 }

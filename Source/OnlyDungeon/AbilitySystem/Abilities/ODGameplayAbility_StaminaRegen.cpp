@@ -4,6 +4,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Combat.h"
+#include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
 #include "GameplayEffect.h"
 #include "TimerManager.h"
@@ -58,7 +59,7 @@ void UODGameplayAbility_StaminaRegen::HandleStaminaChanged(const FOnAttributeCha
 	}
 	else if (IsStaminaFull())
 	{
-		// 가득 참: 회복 GE를 걷어낸다. 다음 소모 때 다시 시작된다.
+		// 가득 참: 회복을 멈춘다. 다음 소모 때 다시 시작된다.
 		StopRegen();
 	}
 }
@@ -91,7 +92,53 @@ void UODGameplayAbility_StaminaRegen::RestartRegenDelay()
 
 void UODGameplayAbility_StaminaRegen::StartRegen()
 {
-	if (RegenEffectHandle.IsValid() || IsStaminaFull())
+	const AActor* Avatar = GetAvatarActorFromActorInfo();
+	if (bRegenActive || IsStaminaFull() || !IsValid(Avatar))
+	{
+		return;
+	}
+
+	bRegenActive = true;
+	RegenElapsed = 0.0f;
+	Avatar->GetWorldTimerManager().SetTimer(RegenTickHandle, this, &ThisClass::ApplyRegenTick, TickInterval, true);
+	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 스태미나 회복 시작"), *GetName());
+}
+
+void UODGameplayAbility_StaminaRegen::StopRegen()
+{
+	if (!bRegenActive)
+	{
+		return;
+	}
+
+	bRegenActive = false;
+	RegenElapsed = 0.0f;
+	if (const AActor* Avatar = GetAvatarActorFromActorInfo(); IsValid(Avatar))
+	{
+		Avatar->GetWorldTimerManager().ClearTimer(RegenTickHandle);
+	}
+	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 스태미나 회복 정지"), *GetName());
+}
+
+float UODGameplayAbility_StaminaRegen::GetCurrentRateMultiplier() const
+{
+	const float Alpha = RampTime > 0.0f ? FMath::Clamp(RegenElapsed / RampTime, 0.0f, 1.0f) : 1.0f;
+	return FMath::Lerp(StartRateMultiplier, MaxRateMultiplier, Alpha);
+}
+
+void UODGameplayAbility_StaminaRegen::ApplyRegenTick()
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+	if (!bRegenActive || !IsValid(ASC) || IsStaminaFull())
+	{
+		StopRegen();
+		return;
+	}
+
+	RegenElapsed += TickInterval;
+	const float Rate = ASC->GetNumericAttribute(UODAttributeSet_Combat::GetStaminaRegenRateAttribute());
+	const float Amount = Rate * GetCurrentRateMultiplier() * TickInterval;
+	if (Amount <= 0.0f)
 	{
 		return;
 	}
@@ -99,24 +146,10 @@ void UODGameplayAbility_StaminaRegen::StartRegen()
 	const FGameplayEffectSpecHandle SpecHandle = MakeOutgoingGameplayEffectSpec(RegenEffectClass, GetAbilityLevel());
 	if (SpecHandle.IsValid())
 	{
-		RegenEffectHandle = ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, SpecHandle);
-		UE_LOG(LogODAbility, Verbose, TEXT("[%s] 스태미나 회복 시작"), *GetName());
+		SpecHandle.Data->SetSetByCallerMagnitude(ODGameplayTags::Data_StaminaRegen, Amount);
+		// 이 적용으로 스태미나가 오르면 HandleStaminaChanged가 가득 참을 확인해 회복을 멈춘다.
+		ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, SpecHandle);
 	}
-}
-
-void UODGameplayAbility_StaminaRegen::StopRegen()
-{
-	if (!RegenEffectHandle.IsValid())
-	{
-		return;
-	}
-
-	if (UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo(); IsValid(ASC))
-	{
-		ASC->RemoveActiveGameplayEffect(RegenEffectHandle);
-	}
-	RegenEffectHandle.Invalidate();
-	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 스태미나 회복 정지"), *GetName());
 }
 
 bool UODGameplayAbility_StaminaRegen::IsStaminaFull() const

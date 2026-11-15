@@ -85,3 +85,4 @@ Content/
 
 # Claude Code 개인 설정 (공유 설정 .claude/settings.json은 추적 가능)
 .claude/settings.local.json
+Docs/Progress.md

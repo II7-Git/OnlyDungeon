@@ -6,6 +6,9 @@
 #include "AbilitySystemComponent.h"
 #include "ODAbilitySystemComponent.generated.h"
 
+/** 입력으로 어빌리티 발동을 시도했지만 실패했을 때 (어빌리티, 사람이 읽을 원인) */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FODAbilityActivationFailedDelegate, const UGameplayAbility* /*Ability*/, const FString& /*Reason*/);
+
 /**
  * OnlyDungeon 전용 ASC.
  * 입력 태그(InputTag.*)로 어빌리티를 찾아 발동/해제한다.
@@ -27,4 +30,29 @@ public:
 
 	/** 눌려 있는 모든 입력을 해제 처리한다. (모드 전환, 사망 시 사용) */
 	void ClearAbilityInput();
+
+	/** 진행 중인 행동 어빌리티(Ability.Action)를 모두 끊는다. 캔슬 구간 입력에서 사용 */
+	void CancelActionAbilities();
+
+	/** 어빌리티 발동 실패를 알린다. (HUD 표시용) 콤보 다음 타격처럼 ASC 밖에서 실패한 경우에도 호출한다. */
+	void ReportActivationFailure(const UGameplayAbility* Ability, const FString& Reason);
+
+	/** 입력으로 발동하려던 어빌리티가 실패했을 때 */
+	FODAbilityActivationFailedDelegate OnAbilityActivationFailed;
+
+	/**
+	 * 진행 중인 콤보에서 파생 공격으로 넘어간다. (콤보 어빌리티가 입력 구간에서 호출)
+	 * InputTag에 연결된 파생 가능 어빌리티를 찾아, 진행 중인 행동을 끊고 State.ComboBranch를 잠시 붙인 채 발동한다.
+	 * @return 발동에 성공하면 true
+	 */
+	bool TryActivateComboBranch(const FGameplayTag& InputTag);
+
+	/**
+	 * InputTag에 연결된 어빌리티를 입력 없이 바로 발동한다. (AI용. 플레이어와 같은 무기 어빌리티를 쓴다)
+	 * @return 발동에 성공하면 true
+	 */
+	bool TryActivateAbilityByInputTag(const FGameplayTag& InputTag);
+
+	/** InputTag에 연결된 어빌리티 중 실행 중인 것이 있는지 */
+	bool IsAbilityActiveByInputTag(const FGameplayTag& InputTag) const;
 };
