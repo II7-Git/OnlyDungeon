@@ -10,7 +10,7 @@
 /**
  * [테스트 전용] 전투 테스트 맵의 허수아비.
  * - AutoAttackInterval > 0이면 그 주기로 플레이어를 바라보고 AutoAttackInputTag 어빌리티를 발동한다. (패링·가드 테스트용)
- * - 플레이어가 AutoAttackRange 밖에 있거나, 사망·경직·공격 중이면 공격하지 않는다.
+ * - 플레이어가 AutoAttackRange 밖에 있거나, 사망·경직·공격 중이거나 전투 대기 상태(bStartDormant)면 공격하지 않는다.
  * - 실제 적 AI는 StateTree로 별도 구현한다. 이 클래스는 게임 콘텐츠에 쓰지 않는다.
  */
 UCLASS()

@@ -16,6 +16,7 @@ class ULevelSequence;
 class ULevelSequencePlayer;
 class ALevelSequenceActor;
 class ACharacter;
+class AODEnemyCharacter;
 struct FHitResult;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODBossEntranceSignature, APawn*, EnteredPawn);
@@ -30,7 +31,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODBossEntranceSignature, APawn*, En
  *     이동 입력은 매 프레임 넣어야 해서 컷신 이동 중에만 Tick을 켠다. (평소에는 꺼져 있음)
  *  4) 걷는 동안(시퀀스 카메라가 화면을 잡고 있을 때) 전투 모드를 보스(3인칭)로 바꾸고,
  *     시퀀스가 끝나면 시퀀스 카메라에서 3인칭 카메라로 블렌드한다.
- *  5) 컷신 종료, 문이 닫힌다(안개문처럼 되돌아갈 수 없음). OnEntered 발생 → 이후 보스 활성화에 사용.
+ *  5) 컷신 종료, 문이 닫힌다(안개문처럼 되돌아갈 수 없음). OnEntered 발생.
+ *  6) Bosses가 지정되어 있으면 보스전 서브시스템에 보스전 시작을 요청한다. (보스 활성화, 보스 체력 바)
+ *     보스를 모두 잡으면(승리) 문이 다시 열린다.
  * 시퀀스 카메라 경로는 EntryPoint→RoomPoint 거리(기본 950cm) 기준으로 만들어져 있다.
  */
 UCLASS()
@@ -92,6 +95,14 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
 	TObjectPtr<UArrowComponent> RoomPoint;
 
+	/** 이 문 안의 보스. 입장이 끝나면 전투를 시작한다. (레벨에 배치한 입구마다 지정, 보스는 bStartDormant를 켠다) */
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "OD|BossEntrance")
+	TArray<TObjectPtr<AODEnemyCharacter>> Bosses;
+
+	/** 보스를 모두 잡으면 문을 다시 연다. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
+	bool bOpenOnVictory = true;
+
 	/** 입장 컷신 (EntryPoint 기준 상대 좌표로 재생) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
 	TObjectPtr<ULevelSequence> EntrySequence;
@@ -148,6 +159,9 @@ private:
 	UFUNCTION()
 	void OnSequenceFinished();
 
+	UFUNCTION()
+	void HandleEncounterEnded(bool bVictory);
+
 	/** 문 앞 도착·회전 후: 시퀀스 재생, 문 열기, 걸어 들어가기 예약 */
 	void StartEntrySequence();
 	void StartWalkIn();
@@ -175,6 +189,9 @@ private:
 
 	TWeakObjectPtr<APawn> EnteringPawn;
 	bool bUsed = false;
+
+	/** 이 입구가 시작한 보스전이 진행 중인지 */
+	bool bEncounterStarted = false;
 	bool bInProgress = false;
 
 	float DoorAlpha = 0.0f;

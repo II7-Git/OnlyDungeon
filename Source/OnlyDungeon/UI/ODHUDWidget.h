@@ -13,6 +13,7 @@ class UCanvasPanel;
 class UODCombatModeComponent;
 class UODInteractionComponent;
 class UODLockOnComponent;
+class AODEnemyCharacter;
 class UGameplayAbility;
 class UProgressBar;
 class USizeBox;
@@ -35,6 +36,7 @@ struct FODHUDBarState
  * - 왼쪽 위: 체력(빨강)·스태미나(초록) 바. 길이는 최대치에 비례하고, 체력은 깎인 부분이 잠시 남았다가 줄어든다.
  * - 왼쪽 아래: 장비 십자 슬롯 (오른손 = 현재 무기)
  * - 아래 가운데: 대상 체력 바 (마지막으로 때린 적, 일정 시간 뒤 숨김. 락온 중에는 락온 대상으로 고정)
+ *   보스전 중에는 보스 이름·체력으로 고정된다. (보스전 서브시스템의 시작·종료 알림)
  * - 락온 대상 위: 락온 표식 (락온 중에만 타이머로 화면 위치 갱신)
  * - 아래 가운데(대상 바 위): 상호작용 안내 ("F  보스방 입장")
  * - 컷신 중에는 HUD 전체를 숨긴다. (전투 모드 컴포넌트의 OnCinematicChanged)
@@ -191,6 +193,12 @@ private:
 	UFUNCTION()
 	void HandleLockOnTargetChanged(AActor* NewTarget);
 
+	UFUNCTION()
+	void HandleBossEncounterStarted(AODEnemyCharacter* Boss);
+
+	UFUNCTION()
+	void HandleBossEncounterEnded(bool bVictory);
+
 	/** 락온 표식을 대상의 화면 위치로 옮긴다. */
 	void UpdateLockOnMarker();
 
@@ -209,6 +217,9 @@ private:
 	TArray<TPair<FGameplayAttribute, FDelegateHandle>> PlayerAttributeHandles;
 	FDelegateHandle FailureHandle;
 	FDelegateHandle HitHandle;
+
+	/** 보스전 중: 대상 바가 보스에 고정되어 다른 대상으로 바뀌거나 숨겨지지 않는다. */
+	bool bBossBarPinned = false;
 
 	TWeakObjectPtr<AActor> Target;
 	TWeakObjectPtr<UAbilitySystemComponent> TargetASC;

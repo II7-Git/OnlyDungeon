@@ -32,7 +32,7 @@ void AODTrainingDummy::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AODTrainingDummy::TryAutoAttack()
 {
 	UODAbilitySystemComponent* ASC = GetODAbilitySystemComponent();
-	if (!IsValid(ASC) || IsDead() || ASC->HasMatchingGameplayTag(ODGameplayTags::State_Stunned) || ASC->HasMatchingGameplayTag(ODGameplayTags::State_Attacking))
+	if (!IsValid(ASC) || IsDead() || !IsCombatActive() || ASC->HasMatchingGameplayTag(ODGameplayTags::State_Stunned) || ASC->HasMatchingGameplayTag(ODGameplayTags::State_Attacking))
 	{
 		return;
 	}

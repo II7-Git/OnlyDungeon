@@ -17,6 +17,8 @@
 #include "MovieSceneSequencePlaybackSettings.h"
 #include "TimerManager.h"
 #include "Character/ODCombatModeComponent.h"
+#include "Character/ODEnemyCharacter.h"
+#include "Core/ODBossEncounterSubsystem.h"
 #include "Core/ODLogChannels.h"
 #include "Interaction/ODInteractionComponent.h"
 
@@ -367,6 +369,43 @@ void AODBossEntrance::FinishEntry()
 
 	UE_LOG(LogOD, Log, TEXT("[%s] 보스방 입장 완료"), *GetName());
 	OnEntered.Broadcast(Pawn);
+
+	// 보스전 시작 (대기 중이던 보스 활성화, HUD 보스 체력 바)
+	if (!Bosses.IsEmpty())
+	{
+		if (UODBossEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<UODBossEncounterSubsystem>() : nullptr)
+		{
+			TArray<AODEnemyCharacter*> BossList;
+			BossList.Reserve(Bosses.Num());
+			for (AODEnemyCharacter* Boss : Bosses)
+			{
+				BossList.Add(Boss);
+			}
+			Encounter->OnEncounterEnded.AddUniqueDynamic(this, &ThisClass::HandleEncounterEnded);
+			bEncounterStarted = true;
+			Encounter->StartEncounter(BossList, this);
+		}
+	}
+}
+
+void AODBossEntrance::HandleEncounterEnded(bool bVictory)
+{
+	if (!bEncounterStarted)
+	{
+		return;
+	}
+	bEncounterStarted = false;
+
+	if (UODBossEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<UODBossEncounterSubsystem>() : nullptr)
+	{
+		Encounter->OnEncounterEnded.RemoveDynamic(this, &ThisClass::HandleEncounterEnded);
+	}
+
+	// 승리하면 닫혀 있던 문을 다시 연다.
+	if (bVictory && bOpenOnVictory)
+	{
+		AnimateDoor(1.0f);
+	}
 }
 
 void AODBossEntrance::AnimateDoor(float TargetAlpha)
@@ -416,6 +455,17 @@ void AODBossEntrance::ResetForTest()
 		World->GetTimerManager().ClearTimer(FinishTimer);
 	}
 	StopWalk();
+
+	// 이 입구에서 시작한 보스전이 진행 중이면 패배로 끝낸다. (보스는 대기 상태로)
+	if (bEncounterStarted)
+	{
+		if (UODBossEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<UODBossEncounterSubsystem>() : nullptr)
+		{
+			Encounter->EndEncounter(false);
+		}
+		bEncounterStarted = false;
+	}
+
 	if (IsValid(SequencePlayer))
 	{
 		SequencePlayer->OnFinished.RemoveDynamic(this, &ThisClass::OnSequenceFinished);

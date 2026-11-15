@@ -35,6 +35,8 @@
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "Character/ODCharacterBase.h"
 #include "Character/ODCombatModeComponent.h"
+#include "Character/ODEnemyCharacter.h"
+#include "Core/ODBossEncounterSubsystem.h"
 #include "Character/ODLockOnComponent.h"
 #include "Interaction/ODInteractionComponent.h"
 #include "Core/ODGameplayTags.h"
@@ -365,6 +367,47 @@ void UODHUDWidget::NativeConstruct()
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().SetTimer(DebugTimer, FTimerDelegate::CreateUObject(this, &ThisClass::RefreshDebugInfo), ODHUD::DebugTickInterval, true);
+
+		// 보스전 시작·종료에 맞춰 보스 체력 바를 띄운다.
+		if (UODBossEncounterSubsystem* Encounter = World->GetSubsystem<UODBossEncounterSubsystem>())
+		{
+			Encounter->OnEncounterStarted.AddUniqueDynamic(this, &ThisClass::HandleBossEncounterStarted);
+			Encounter->OnEncounterEnded.AddUniqueDynamic(this, &ThisClass::HandleBossEncounterEnded);
+			if (Encounter->IsEncounterActive())
+			{
+				HandleBossEncounterStarted(Encounter->GetCurrentBoss());
+			}
+		}
+	}
+}
+
+void UODHUDWidget::HandleBossEncounterStarted(AODEnemyCharacter* Boss)
+{
+	if (!IsValid(Boss))
+	{
+		return;
+	}
+
+	bBossBarPinned = false;
+	SetTarget(Boss);
+	bBossBarPinned = true;
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TargetHideTimer);
+	}
+}
+
+void UODHUDWidget::HandleBossEncounterEnded(bool bVictory)
+{
+	bBossBarPinned = false;
+	if (bVictory)
+	{
+		// 빈 체력 바를 잠시 보여 준 뒤 숨긴다.
+		StartTargetHideTimer();
+	}
+	else
+	{
+		ClearTarget();
 	}
 }
 
@@ -378,7 +421,14 @@ void UODHUDWidget::NativeDestruct()
 		TimerManager.ClearTimer(TargetHideTimer);
 		TimerManager.ClearTimer(FailureHideTimer);
 		TimerManager.ClearTimer(LockOnMarkerTimer);
+
+		if (UODBossEncounterSubsystem* Encounter = World->GetSubsystem<UODBossEncounterSubsystem>())
+		{
+			Encounter->OnEncounterStarted.RemoveDynamic(this, &ThisClass::HandleBossEncounterStarted);
+			Encounter->OnEncounterEnded.RemoveDynamic(this, &ThisClass::HandleBossEncounterEnded);
+		}
 	}
+	bBossBarPinned = false;
 	ClearTarget();
 	UnbindFromASC();
 	UnbindPawnComponents();
@@ -477,8 +527,8 @@ void UODHUDWidget::HandleLockOnTargetChanged(AActor* NewTarget)
 	{
 		LockOnMarker->SetVisibility(ESlateVisibility::Collapsed);
 	}
-	// 락온이 풀리면 대상 바는 평소처럼 잠시 뒤 숨긴다.
-	if (Target.IsValid())
+	// 락온이 풀리면 대상 바는 평소처럼 잠시 뒤 숨긴다. (보스 바는 보스전이 끝날 때까지 유지)
+	if (Target.IsValid() && !bBossBarPinned)
 	{
 		StartTargetHideTimer();
 	}
@@ -720,13 +770,19 @@ void UODHUDWidget::HandleMeleeHit(const FGameplayEventData* Payload)
 		return;
 	}
 
+	if (bBossBarPinned)
+	{
+		return;
+	}
+
 	SetTarget(HitActor);
 	StartTargetHideTimer();
 }
 
 void UODHUDWidget::SetTarget(AActor* NewTarget)
 {
-	if (Target.Get() == NewTarget)
+	// 보스전 중에는 대상 바가 보스에 고정된다.
+	if (bBossBarPinned || Target.Get() == NewTarget)
 	{
 		return;
 	}
