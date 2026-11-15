@@ -58,6 +58,7 @@ namespace ODGameplayTags
 	// ---------- 데이터 (SetByCaller) ----------
 	ONLYDUNGEON_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Data_Damage);
 	ONLYDUNGEON_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Data_PoiseDamage);
+	ONLYDUNGEON_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Data_StaminaRegen);
 
 	// ---------- 쿨다운 ----------
 	ONLYDUNGEON_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Cooldown_Skill_1);
