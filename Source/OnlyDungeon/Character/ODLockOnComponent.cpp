@@ -180,6 +180,10 @@ AActor* UODLockOnComponent::FindBestTarget() const
 			continue;
 		}
 		Checked.Add(Candidate);
+		if (const AODCharacterBase* OwnerCharacter = Cast<AODCharacterBase>(OwnerPawn); OwnerCharacter && !OwnerCharacter->IsHostileTo(Candidate))
+		{
+			continue;
+		}
 
 		const FVector AimLocation = Candidate->GetActorLocation() + FVector(0.0, 0.0, TargetHeightOffset);
 		const FVector ToCandidate = AimLocation - ViewLocation;

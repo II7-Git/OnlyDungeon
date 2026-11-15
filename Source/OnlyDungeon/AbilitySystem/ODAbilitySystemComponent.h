@@ -46,4 +46,13 @@ public:
 	 * @return 발동에 성공하면 true
 	 */
 	bool TryActivateComboBranch(const FGameplayTag& InputTag);
+
+	/**
+	 * InputTag에 연결된 어빌리티를 입력 없이 바로 발동한다. (AI용. 플레이어와 같은 무기 어빌리티를 쓴다)
+	 * @return 발동에 성공하면 true
+	 */
+	bool TryActivateAbilityByInputTag(const FGameplayTag& InputTag);
+
+	/** InputTag에 연결된 어빌리티 중 실행 중인 것이 있는지 */
+	bool IsAbilityActiveByInputTag(const FGameplayTag& InputTag) const;
 };

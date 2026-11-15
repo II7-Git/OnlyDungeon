@@ -205,6 +205,40 @@ void UODAbilitySystemComponent::ReportActivationFailure(const UGameplayAbility* 
 	OnAbilityActivationFailed.Broadcast(Ability, Reason);
 }
 
+bool UODAbilitySystemComponent::TryActivateAbilityByInputTag(const FGameplayTag& InputTag)
+{
+	if (!InputTag.IsValid())
+	{
+		return false;
+	}
+
+	FGameplayAbilitySpecHandle FoundHandle;
+	{
+		ABILITYLIST_SCOPE_LOCK();
+		for (const FGameplayAbilitySpec& Spec : GetActivatableAbilities())
+		{
+			if (Spec.Ability && !Spec.IsActive() && Spec.GetDynamicSpecSourceTags().HasTagExact(InputTag))
+			{
+				FoundHandle = Spec.Handle;
+				break;
+			}
+		}
+	}
+	return FoundHandle.IsValid() && TryActivateAbility(FoundHandle);
+}
+
+bool UODAbilitySystemComponent::IsAbilityActiveByInputTag(const FGameplayTag& InputTag) const
+{
+	for (const FGameplayAbilitySpec& Spec : GetActivatableAbilities())
+	{
+		if (Spec.IsActive() && Spec.GetDynamicSpecSourceTags().HasTagExact(InputTag))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void UODAbilitySystemComponent::CancelActionAbilities()
 {
 	const FGameplayTagContainer ActionTags(ODGameplayTags::Ability_Action);

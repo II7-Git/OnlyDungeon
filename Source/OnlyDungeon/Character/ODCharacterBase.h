@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
+#include "GenericTeamAgentInterface.h"
 #include "AbilitySystem/ODAbilitySet.h"
 #include "ODCharacterBase.generated.h"
 
@@ -22,7 +23,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODOnCharacterDeathSignature, AODCha
  * - 사망해도 액터를 파괴하지 않는다. 부활은 위치 이동 + 상태 초기화로 처리한다. (부활 로직은 이후 단계)
  */
 UCLASS(Abstract)
-class ONLYDUNGEON_API AODCharacterBase : public ACharacter, public IAbilitySystemInterface
+class ONLYDUNGEON_API AODCharacterBase : public ACharacter, public IAbilitySystemInterface, public IGenericTeamAgentInterface
 {
 	GENERATED_BODY()
 
@@ -55,6 +56,13 @@ public:
 	/** 화면에 표시할 이름 (비어 있으면 클래스 이름) */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Character")
 	FText GetDisplayName() const;
+
+	//~ IGenericTeamAgentInterface
+	virtual FGenericTeamId GetGenericTeamId() const override { return FGenericTeamId(TeamId); }
+	//~ End
+
+	/** 다른 진영인지 (무기 판정·범위 판정·락온이 적대 대상만 고른다). OD 캐릭터가 아니면 적대로 본다. */
+	bool IsHostileTo(const AActor* Other) const;
 
 	/**
 	 * 부활(상태 초기화): 진행 중 행동·사망 연출 취소, 사망 해제, 기본 어빌리티 세트 재부여(초기 수치 GE·패시브 재발동),
@@ -100,6 +108,10 @@ protected:
 	/** 장비(무기) 관리. ASC 초기화가 끝난 뒤 기본 무기를 장착한다. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Equipment")
 	TObjectPtr<UODEquipmentComponent> EquipmentComponent;
+
+	/** 진영 (0 = 플레이어, 1 = 적). 같은 진영끼리는 서로 맞지 않는다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character")
+	uint8 TeamId = 1;
 
 	/** 화면에 표시할 이름 (HUD의 대상 체력 바 등) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Character")

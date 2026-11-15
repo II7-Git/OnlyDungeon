@@ -19,7 +19,10 @@ public class OnlyDungeonEditor : ModuleRules
 			"OnlyDungeon",
 			"LevelSequence",
 			"MovieScene",
-			"MovieSceneTracks"
+			"MovieSceneTracks",
+			"StateTreeModule",
+			"StateTreeEditorModule",
+			"GameplayTags"
 		});
 	}
 }

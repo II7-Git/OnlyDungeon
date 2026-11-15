@@ -12,6 +12,7 @@
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "Equipment/ODWeaponData.h"
+#include "Character/ODCharacterBase.h"
 #include "HAL/IConsoleManager.h"
 
 namespace
@@ -93,6 +94,11 @@ void AODWeaponActor::TickTrace()
 			{
 				continue;
 			}
+			// 같은 진영(적끼리)은 맞지 않는다.
+			if (const AODCharacterBase* OwnerCharacter = Cast<AODCharacterBase>(GetOwner()); OwnerCharacter && !OwnerCharacter->IsHostileTo(HitActor))
+			{
+				continue;
+			}
 
 			HitActors.Add(HitActor);
 			SendHitEvent(Hit);
@@ -154,6 +160,10 @@ void AODWeaponActor::PerformAreaHit()
 			continue;
 		}
 		Processed.Add(HitActor);
+		if (const AODCharacterBase* OwnerCharacter = Cast<AODCharacterBase>(OwnerActor); OwnerCharacter && !OwnerCharacter->IsHostileTo(HitActor))
+		{
+			continue;
+		}
 
 		// 정면 부채꼴 안에 있는 대상만. (몸이 겹칠 만큼 가까우면 각도와 무관하게 맞는다)
 		FVector ToTarget = HitActor->GetActorLocation() - Origin;

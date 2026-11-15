@@ -104,6 +104,16 @@ void AODCharacterBase::InitializeAbilitySystem()
 	}
 }
 
+bool AODCharacterBase::IsHostileTo(const AActor* Other) const
+{
+	const AODCharacterBase* OtherCharacter = Cast<AODCharacterBase>(Other);
+	if (!OtherCharacter)
+	{
+		return Other != this;
+	}
+	return OtherCharacter != this && OtherCharacter->TeamId != TeamId;
+}
+
 void AODCharacterBase::ResetForTest()
 {
 	Revive();

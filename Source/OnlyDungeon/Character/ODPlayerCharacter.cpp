@@ -55,6 +55,9 @@ AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	CombatModeComponent = CreateDefaultSubobject<UODCombatModeComponent>(TEXT("CombatMode"));
 	InteractionComponent = CreateDefaultSubobject<UODInteractionComponent>(TEXT("Interaction"));
 	LockOnComponent = CreateDefaultSubobject<UODLockOnComponent>(TEXT("LockOn"));
+
+	// 플레이어 진영
+	TeamId = 0;
 }
 
 void AODPlayerCharacter::NotifyControllerChanged()
