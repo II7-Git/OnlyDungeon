@@ -191,9 +191,9 @@ bool UODGameplayAbility_MeleeCombo::TryBranchCombo()
 
 void UODGameplayAbility_MeleeCombo::OnHitTraceEvent(FGameplayEventData Payload)
 {
-	// 필드: 판정이 끝나면 바로 회피로 끊을 수 있다. 보스 모드는 몽타주의 캔슬 구간 노티파이(끝부분)만 따른다.
-	const UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
-	if (Payload.EventMagnitude <= 0.0f && IsValid(ASC) && ASC->HasMatchingGameplayTag(ODGameplayTags::Mode_Field))
+	// 휘두르는 궤적(판정 구간)이 끝나면 후딜 동안 회피로 끊을 수 있다. (필드·보스 모드 공통)
+	// 캔슬 수단은 회피뿐이라(ASC) 약공 연타는 콤보 구간에서 그대로 다음 타격으로 이어진다.
+	if (Payload.EventMagnitude <= 0.0f)
 	{
 		OpenCancelWindow();
 	}

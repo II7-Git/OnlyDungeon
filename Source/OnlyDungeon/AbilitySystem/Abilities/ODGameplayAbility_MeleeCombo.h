@@ -146,7 +146,7 @@ private:
 	UFUNCTION()
 	void OnMeleeHit(FGameplayEventData Payload);
 
-	/** 판정 구간 시작·끝. 필드 모드에서는 판정이 끝나는 즉시 회피 캔슬을 허용한다. (빠른 캔슬) */
+	/** 판정 구간 시작·끝. 휘두르는 궤적이 끝나는 즉시(후딜 시작) 회피 캔슬을 허용한다. (필드·보스 모드 공통) */
 	UFUNCTION()
 	void OnHitTraceEvent(FGameplayEventData Payload);
 
