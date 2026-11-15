@@ -545,13 +545,11 @@ void UODHUDWidget::HandleLockOnTargetChanged(AActor* NewTarget)
 	UWorld* World = GetWorld();
 	const bool bLockedOn = IsValid(NewTarget);
 
+	// 하단 대상 바는 보스 전용이라 락온은 표식만 띄운다. (일반 몬스터 체력은 머리 위 이름표)
 	if (bLockedOn)
 	{
-		// 락온 중에는 대상 바를 락온 대상에 고정한다. (숨김 예약 취소)
-		SetTarget(NewTarget);
 		if (World)
 		{
-			World->GetTimerManager().ClearTimer(TargetHideTimer);
 			World->GetTimerManager().SetTimer(LockOnMarkerTimer, FTimerDelegate::CreateUObject(this, &ThisClass::UpdateLockOnMarker), ODHUD::LockOnMarkerInterval, true);
 		}
 		UpdateLockOnMarker();
@@ -565,11 +563,6 @@ void UODHUDWidget::HandleLockOnTargetChanged(AActor* NewTarget)
 	if (IsValid(LockOnMarker))
 	{
 		LockOnMarker->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	// 락온이 풀리면 대상 바는 평소처럼 잠시 뒤 숨긴다. (보스 바는 보스전이 끝날 때까지 유지)
-	if (Target.IsValid() && !bBossBarPinned)
-	{
-		StartTargetHideTimer();
 	}
 }
 
@@ -652,7 +645,6 @@ void UODHUDWidget::BindToASC(UAbilitySystemComponent* ASC)
 	{
 		FailureHandle = ODASC->OnAbilityActivationFailed.AddUObject(this, &ThisClass::HandleActivationFailed);
 	}
-	HitHandle = ASC->GenericGameplayEventCallbacks.FindOrAdd(ODGameplayTags::Event_Melee_Hit).AddUObject(this, &ThisClass::HandleMeleeHit);
 
 	RefreshPlayerBars();
 }
@@ -669,14 +661,9 @@ void UODHUDWidget::UnbindFromASC()
 		{
 			ODASC->OnAbilityActivationFailed.Remove(FailureHandle);
 		}
-		if (FGameplayEventMulticastDelegate* HitDelegate = ASC->GenericGameplayEventCallbacks.Find(ODGameplayTags::Event_Melee_Hit))
-		{
-			HitDelegate->Remove(HitHandle);
-		}
 	}
 	PlayerAttributeHandles.Reset();
 	FailureHandle.Reset();
-	HitHandle.Reset();
 	ObservedASC.Reset();
 }
 
@@ -792,33 +779,6 @@ void UODHUDWidget::UpdateLag()
 	{
 		World->GetTimerManager().ClearTimer(LagTimer);
 	}
-}
-
-void UODHUDWidget::HandleMeleeHit(const FGameplayEventData* Payload)
-{
-	if (!Payload)
-	{
-		return;
-	}
-	AActor* HitActor = const_cast<AActor*>(Payload->Target.Get());
-	if (!IsValid(HitActor) || HitActor == ObservedPawn.Get())
-	{
-		return;
-	}
-
-	// 락온 중에는 대상 바가 락온 대상에 고정되어 있으므로 바꾸지 않는다.
-	if (const UODLockOnComponent* LockOn = ObservedLockOn.Get(); LockOn && LockOn->IsLockedOn())
-	{
-		return;
-	}
-
-	if (bBossBarPinned)
-	{
-		return;
-	}
-
-	SetTarget(HitActor);
-	StartTargetHideTimer();
 }
 
 void UODHUDWidget::SetTarget(AActor* NewTarget)

@@ -9,6 +9,7 @@
 
 class AODEnemyCharacter;
 class UStateTree;
+class UWidgetComponent;
 struct FOnAttributeChangeData;
 
 /** 보스 페이즈: 체력 비율이 HealthRatio 이하가 되면 PhaseTag를 붙인다. */
@@ -36,6 +37,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FODEnemyCombatActiveSignature, AODE
  *   GetLockOnTarget()이 공격 대상을 돌려주므로 공격 어빌리티가 대상 쪽으로 나간다.
  * - 보스 페이즈: Phases에 따라 체력 비율로 State.Phase.* 태그를 바꾼다. StateTree가 이 태그로 패턴을 고른다.
  * - 적은 항상 Mode.Boss 태그를 가진다. (강공격·방어 어빌리티가 이 태그를 요구)
+ * - 일반 몬스터는 머리 위 이름표(이름·체력)를 띄운다: 플레이어가 가까이 있거나, 플레이어와 싸우는 중이거나, 피해를 입은 상태일 때.
+ *   보스는 bShowNameplate를 꺼서 이름표 대신 화면 하단 보스 체력 바만 쓴다.
  */
 UCLASS(Abstract)
 class ONLYDUNGEON_API AODEnemyCharacter : public AODCharacterBase
@@ -111,6 +114,22 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Phase")
 	TArray<FODEnemyPhase> Phases;
 
+	/** 머리 위 이름표 (화면 공간 위젯) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Enemy|UI")
+	TObjectPtr<UWidgetComponent> NameplateComponent;
+
+	/** 머리 위 이름표를 쓰는지. 보스는 끄고 화면 하단 보스 체력 바를 쓴다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|UI")
+	bool bShowNameplate = true;
+
+	/** 플레이어가 이 거리 안에 있으면 이름표를 보여 준다. (전투 중이거나 피해를 입었으면 거리와 무관하게 보임) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|UI", meta = (ClampMin = "0.0", Units = "cm"))
+	float NameplateShowDistance = 1500.0f;
+
+	/** 캡슐 꼭대기에서 이름표까지의 높이 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|UI", meta = (Units = "cm"))
+	float NameplateHeightOffset = 35.0f;
+
 private:
 	void SetCombatActive(bool bNewActive);
 
@@ -119,6 +138,11 @@ private:
 
 	/** AI 컨트롤러에 상태 변화를 알린다. */
 	void RefreshAI(bool bRestart) const;
+
+	/** 이름표를 보일지 다시 판단한다. (주기 타이머, 사망·부활 시) */
+	void RefreshNameplate();
+
+	FTimerHandle NameplateTimer;
 
 	TWeakObjectPtr<AODCharacterBase> CombatTarget;
 

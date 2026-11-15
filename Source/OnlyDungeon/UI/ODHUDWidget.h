@@ -36,8 +36,8 @@ struct FODHUDBarState
  * 플레이어 HUD. 다크소울 배치를 따른다.
  * - 왼쪽 위: 체력(빨강)·스태미나(초록) 바. 길이는 최대치에 비례하고, 체력은 깎인 부분이 잠시 남았다가 줄어든다.
  * - 왼쪽 아래: 장비 십자 슬롯 (오른손 = 현재 무기)
- * - 아래 가운데: 대상 체력 바 (마지막으로 때린 적, 일정 시간 뒤 숨김. 락온 중에는 락온 대상으로 고정)
- *   보스전 중에는 보스 이름·체력으로 고정된다. (보스전 서브시스템의 시작·종료 알림)
+ * - 아래 가운데: 보스 체력 바 (보스전 중에만 보스 이름·체력. 보스전 서브시스템의 시작·종료 알림)
+ *   일반 몬스터의 체력은 머리 위 이름표(UODEnemyNameplateWidget)로 보여 준다.
  * - 락온 대상 위: 락온 표식 (락온 중에만 타이머로 화면 위치 갱신)
  * - 아래 가운데(대상 바 위): 상호작용 안내 ("F  보스방 입장")
  * - 가운데: 사망 문구 (플레이어가 죽어 있는 동안)
@@ -219,7 +219,6 @@ private:
 
 	void BindPawnComponents(APawn* Pawn);
 	void UnbindPawnComponents();
-	void HandleMeleeHit(const FGameplayEventData* Payload);
 
 	TWeakObjectPtr<APawn> ObservedPawn;
 	TWeakObjectPtr<UODCombatModeComponent> ObservedModeComponent;
@@ -228,9 +227,8 @@ private:
 	TWeakObjectPtr<UAbilitySystemComponent> ObservedASC;
 	TArray<TPair<FGameplayAttribute, FDelegateHandle>> PlayerAttributeHandles;
 	FDelegateHandle FailureHandle;
-	FDelegateHandle HitHandle;
 
-	/** 보스전 중: 대상 바가 보스에 고정되어 다른 대상으로 바뀌거나 숨겨지지 않는다. */
+	/** 보스전 중: 대상 바가 보스에 고정되어 다른 대상으로 바뀌거나 숨겨지지 않는다. (대상 바는 보스 전용) */
 	bool bBossBarPinned = false;
 
 	TWeakObjectPtr<AActor> Target;

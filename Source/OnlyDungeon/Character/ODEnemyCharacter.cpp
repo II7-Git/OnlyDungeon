@@ -3,6 +3,10 @@
 #include "ODEnemyCharacter.h"
 
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/WidgetComponent.h"
+#include "TimerManager.h"
+#include "UI/ODEnemyNameplateWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
@@ -19,6 +23,18 @@ AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer
 	AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
 	AIControllerClass = AODAIController::StaticClass();
 	TeamId = 1;
+
+	// 머리 위 이름표: 화면 공간으로 그려 거리와 무관하게 같은 크기로 보이고 카메라를 향한다.
+	NameplateComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("Nameplate"));
+	NameplateComponent->SetupAttachment(RootComponent);
+	NameplateComponent->SetRelativeLocation(FVector(0.0, 0.0, 130.0));
+	NameplateComponent->SetWidgetSpace(EWidgetSpace::Screen);
+	NameplateComponent->SetDrawAtDesiredSize(true);
+	NameplateComponent->SetWidgetClass(UODEnemyNameplateWidget::StaticClass());
+	NameplateComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	NameplateComponent->SetGenerateOverlapEvents(false);
+	NameplateComponent->SetCanEverAffectNavigation(false);
+	NameplateComponent->SetHiddenInGame(true);
 
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 360.0f, 0.0f);
@@ -50,12 +66,35 @@ void AODEnemyCharacter::BeginPlay()
 	}
 	RefreshPhase();
 
+	// 머리 위 이름표
+	if (IsValid(NameplateComponent))
+	{
+		if (bShowNameplate)
+		{
+			// 캡슐 꼭대기 위에 둔다. (루트 스케일이 적용되므로 스케일 전 높이 기준)
+			const float HalfHeight = IsValid(GetCapsuleComponent()) ? GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.0f;
+			NameplateComponent->SetRelativeLocation(FVector(0.0, 0.0, HalfHeight + NameplateHeightOffset));
+			NameplateComponent->InitWidget();
+			if (UODEnemyNameplateWidget* Nameplate = Cast<UODEnemyNameplateWidget>(NameplateComponent->GetUserWidgetObject()))
+			{
+				Nameplate->SetCharacter(this);
+			}
+			GetWorldTimerManager().SetTimer(NameplateTimer, this, &ThisClass::RefreshNameplate, 0.2f, true, 0.0f);
+		}
+		else
+		{
+			NameplateComponent->SetHiddenInGame(true);
+			NameplateComponent->SetVisibility(false);
+		}
+	}
+
 	// 빙의가 BeginPlay보다 먼저 일어나므로, 상태가 준비된 지금 AI를 시작(대기 상태면 정지)한다.
 	RefreshAI(true);
 }
 
 void AODEnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	GetWorldTimerManager().ClearTimer(NameplateTimer);
 	if (UODAbilitySystemComponent* ASC = GetODAbilitySystemComponent(); IsValid(ASC) && HealthChangedHandle.IsValid())
 	{
 		ASC->GetGameplayAttributeValueChangeDelegate(UODAttributeSet_Health::GetHealthAttribute()).Remove(HealthChangedHandle);
@@ -110,6 +149,34 @@ void AODEnemyCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	Super::HandleOutOfHealth(DamageInstigator);
 	CombatTarget.Reset();
 	RefreshAI(false);
+	RefreshNameplate();
+}
+
+void AODEnemyCharacter::RefreshNameplate()
+{
+	if (!IsValid(NameplateComponent))
+	{
+		return;
+	}
+
+	bool bVisible = false;
+	if (bShowNameplate && !IsDead())
+	{
+		const APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(this, 0);
+		const UODAbilitySystemComponent* ASC = GetODAbilitySystemComponent();
+
+		// 가까이 있거나, 플레이어와 싸우는 중이거나, 피해를 입은 상태면 보인다.
+		const bool bNear = IsValid(PlayerPawn) && FVector::DistSquared(GetActorLocation(), PlayerPawn->GetActorLocation()) <= FMath::Square(NameplateShowDistance);
+		const bool bFightingPlayer = IsValid(PlayerPawn) && GetCombatTarget() == PlayerPawn;
+		const bool bDamaged = IsValid(ASC)
+			&& ASC->GetNumericAttribute(UODAttributeSet_Health::GetHealthAttribute()) < ASC->GetNumericAttribute(UODAttributeSet_Health::GetMaxHealthAttribute());
+		bVisible = bNear || bFightingPlayer || bDamaged;
+	}
+
+	if (NameplateComponent->bHiddenInGame == bVisible)
+	{
+		NameplateComponent->SetHiddenInGame(!bVisible);
+	}
 }
 
 void AODEnemyCharacter::RefreshAI(bool bRestart) const
@@ -217,6 +284,7 @@ void AODEnemyCharacter::Revive()
 	bReturningHome = false;
 	SetCombatActive(!bStartDormant);
 	RefreshPhase();
+	RefreshNameplate();
 	// 사망으로 멈췄던 AI를 처음 상태부터 다시 돌린다.
 	RefreshAI(true);
 }
