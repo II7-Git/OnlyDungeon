@@ -15,6 +15,7 @@ class UODWeaponData;
 class UODCombatModeComponent;
 class UODInteractionComponent;
 class UODLockOnComponent;
+class UODPotionComponent;
 struct FInputActionValue;
 
 /**
@@ -37,6 +38,10 @@ public:
 	UODCombatModeComponent* GetCombatModeComponent() const { return CombatModeComponent; }
 	UODInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
 	UODLockOnComponent* GetLockOnComponent() const { return LockOnComponent; }
+	UODPotionComponent* GetPotionComponent() const { return PotionComponent; }
+
+	/** 부활·휴식: 기본 처리에 더해 회복 물약을 가득 채운다. */
+	virtual void Revive() override;
 
 	/** 락온 컴포넌트가 잡고 있는 대상 (없으면 nullptr) */
 	virtual AActor* GetLockOnTarget() const override;
@@ -80,6 +85,10 @@ protected:
 	/** 락온 (보스 모드 대상 고정) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|LockOn")
 	TObjectPtr<UODLockOnComponent> LockOnComponent;
+
+	/** 회복 물약 개수 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Potion")
+	TObjectPtr<UODPotionComponent> PotionComponent;
 
 	/** 입력 액션 ↔ InputTag 매핑 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Input")

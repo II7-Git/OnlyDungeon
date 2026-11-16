@@ -22,6 +22,7 @@
 #include "Input/ODInputConfig.h"
 #include "Character/ODCombatModeComponent.h"
 #include "Character/ODLockOnComponent.h"
+#include "Character/ODPotionComponent.h"
 #include "Interaction/ODInteractionComponent.h"
 #include "World/ODBossEntrance.h"
 #include "Core/ODGameMode.h"
@@ -55,6 +56,7 @@ AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	CombatModeComponent = CreateDefaultSubobject<UODCombatModeComponent>(TEXT("CombatMode"));
 	InteractionComponent = CreateDefaultSubobject<UODInteractionComponent>(TEXT("Interaction"));
 	LockOnComponent = CreateDefaultSubobject<UODLockOnComponent>(TEXT("LockOn"));
+	PotionComponent = CreateDefaultSubobject<UODPotionComponent>(TEXT("Potion"));
 
 	// 플레이어 진영
 	TeamId = 0;
@@ -239,6 +241,17 @@ void AODPlayerCharacter::Input_LockOn()
 	if (IsValid(LockOnComponent) && !IsDead())
 	{
 		LockOnComponent->ToggleLockOn();
+	}
+}
+
+void AODPlayerCharacter::Revive()
+{
+	Super::Revive();
+
+	// 휴식·사망(부활)·테스트 초기화 모두 이 경로를 지나므로 여기서 물약을 채운다.
+	if (IsValid(PotionComponent))
+	{
+		PotionComponent->Refill();
 	}
 }
 

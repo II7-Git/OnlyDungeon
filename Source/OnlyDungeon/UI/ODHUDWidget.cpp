@@ -38,6 +38,7 @@
 #include "Character/ODEnemyCharacter.h"
 #include "Core/ODBossEncounterSubsystem.h"
 #include "Character/ODLockOnComponent.h"
+#include "Character/ODPotionComponent.h"
 #include "Interaction/ODInteractionComponent.h"
 #include "Core/ODGameplayTags.h"
 #include "Equipment/ODEquipmentComponent.h"
@@ -94,6 +95,8 @@ namespace ODHUD
 			{ TEXT("State.Invulnerable"), TEXT("무적") },
 			{ TEXT("State.Stunned"), TEXT("경직") },
 			{ TEXT("State.Dead"), TEXT("사망") },
+			{ TEXT("State.Drinking"), TEXT("물약 마시는 중") },
+			{ TEXT("State.LockOn"), TEXT("락온") },
 		};
 		const FString* Label = Labels.Find(Tag.GetTagName());
 		return Label ? *Label : Tag.ToString();
@@ -263,7 +266,39 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 		AddSlot(0, 1, nullptr);
 		AddSlot(1, 0, nullptr);
 		AddSlot(1, 2, RightHandText);
-		AddSlot(2, 1, nullptr);
+
+		// 아래 슬롯: 회복 물약 (다크소울 에스트 병처럼 이름과 남은 개수)
+		{
+			UVerticalBox* ItemBox = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ItemSlot"));
+			ItemNameText = MakeText(Tree, 9, TextColor, TEXT("ItemNameText"));
+			ItemNameText->SetText(NSLOCTEXT("OnlyDungeon", "HUDPotionName", "회복 물약"));
+			ItemNameText->SetJustification(ETextJustify::Center);
+			ItemCountText = MakeText(Tree, 18, FLinearColor(0.95f, 0.85f, 0.55f), TEXT("ItemCountText"));
+			ItemCountText->SetJustification(ETextJustify::Center);
+			if (UVerticalBoxSlot* NameSlot = ItemBox->AddChildToVerticalBox(ItemNameText))
+			{
+				NameSlot->SetHorizontalAlignment(HAlign_Center);
+			}
+			if (UVerticalBoxSlot* CountSlot = ItemBox->AddChildToVerticalBox(ItemCountText))
+			{
+				CountSlot->SetHorizontalAlignment(HAlign_Center);
+			}
+
+			USizeBox* Cell = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+			Cell->SetWidthOverride(76.0f);
+			Cell->SetHeightOverride(76.0f);
+			UBorder* Frame = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
+			Frame->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.45f));
+			Frame->SetPadding(FMargin(4.0f));
+			Frame->SetHorizontalAlignment(HAlign_Center);
+			Frame->SetVerticalAlignment(VAlign_Center);
+			Frame->SetContent(ItemBox);
+			Cell->AddChild(Frame);
+			if (UGridSlot* GridSlot = Grid->AddChildToGrid(Cell, 2, 1))
+			{
+				GridSlot->SetPadding(FMargin(3.0f));
+			}
+		}
 	}
 
 	// ---- 아래 가운데: 대상 체력 (보스 바 형식) ----
@@ -492,6 +527,12 @@ void UODHUDWidget::BindPawnComponents(APawn* Pawn)
 		Character->OnDeath.AddUniqueDynamic(this, &ThisClass::HandleObservedPawnDeath);
 	}
 	RefreshDeathText();
+	if (UODPotionComponent* Potion = Pawn->FindComponentByClass<UODPotionComponent>())
+	{
+		ObservedPotion = Potion;
+		Potion->OnChargesChanged.AddUniqueDynamic(this, &ThisClass::HandlePotionChargesChanged);
+		HandlePotionChargesChanged(Potion->GetCharges(), Potion->GetMaxCharges());
+	}
 	if (UODLockOnComponent* LockOn = Pawn->FindComponentByClass<UODLockOnComponent>())
 	{
 		ObservedLockOn = LockOn;
@@ -534,10 +575,29 @@ void UODHUDWidget::UnbindPawnComponents()
 	{
 		LockOn->OnTargetChanged.RemoveDynamic(this, &ThisClass::HandleLockOnTargetChanged);
 	}
+	if (UODPotionComponent* Potion = ObservedPotion.Get())
+	{
+		Potion->OnChargesChanged.RemoveDynamic(this, &ThisClass::HandlePotionChargesChanged);
+	}
+	ObservedPotion.Reset();
 	ObservedModeComponent.Reset();
 	ObservedInteraction.Reset();
 	ObservedLockOn.Reset();
 	HandleLockOnTargetChanged(nullptr);
+}
+
+void UODHUDWidget::HandlePotionChargesChanged(int32 CurrentCharges, int32 MaxCharges)
+{
+	if (IsValid(ItemCountText))
+	{
+		ItemCountText->SetText(FText::AsNumber(CurrentCharges));
+		// 다 쓰면 흐리게 (다크소울의 빈 에스트 병처럼)
+		ItemCountText->SetColorAndOpacity(FSlateColor(CurrentCharges > 0 ? FLinearColor(0.95f, 0.85f, 0.55f) : FLinearColor(0.4f, 0.4f, 0.4f)));
+	}
+	if (IsValid(ItemNameText))
+	{
+		ItemNameText->SetColorAndOpacity(FSlateColor(CurrentCharges > 0 ? FLinearColor(0.85f, 0.82f, 0.75f) : FLinearColor(0.4f, 0.4f, 0.4f)));
+	}
 }
 
 void UODHUDWidget::HandleLockOnTargetChanged(AActor* NewTarget)

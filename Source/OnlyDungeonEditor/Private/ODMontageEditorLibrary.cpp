@@ -70,6 +70,52 @@ bool UODMontageEditorLibrary::BuildSectionedMontage(UAnimMontage* Montage, const
 	return true;
 }
 
+bool UODMontageEditorLibrary::BuildRangeMontage(UAnimMontage* Montage, UAnimSequenceBase* Sequence, float StartTime, float EndTime, FName SlotName, float PlayRate)
+{
+	if (!IsValid(Montage) || !IsValid(Sequence) || EndTime <= StartTime || PlayRate <= 0.0f || SlotName.IsNone())
+	{
+		UE_LOG(LogODEditor, Error, TEXT("BuildRangeMontage: 인자가 잘못되었습니다. (몽타주·시퀀스 유효성, 구간, 재생 속도, 슬롯 이름 확인)"));
+		return false;
+	}
+
+	const float SequenceLength = Sequence->GetPlayLength();
+	StartTime = FMath::Clamp(StartTime, 0.0f, SequenceLength);
+	EndTime = FMath::Clamp(EndTime, StartTime, SequenceLength);
+
+	Montage->Modify();
+	if (Montage->SlotAnimTracks.IsEmpty())
+	{
+		Montage->AddSlot(SlotName);
+	}
+	Montage->SlotAnimTracks.SetNum(1);
+	Montage->SlotAnimTracks[0].SlotName = SlotName;
+
+	FAnimTrack& AnimTrack = Montage->SlotAnimTracks[0].AnimTrack;
+	AnimTrack.AnimSegments.Reset();
+	FAnimSegment Segment;
+	Segment.SetAnimReference(Sequence, true);
+	Segment.StartPos = 0.0f;
+	Segment.AnimStartTime = StartTime;
+	Segment.AnimEndTime = EndTime;
+	Segment.AnimPlayRate = PlayRate;
+	AnimTrack.AnimSegments.Add(Segment);
+
+	const float Length = Segment.GetLength();
+	Montage->CompositeSections.Reset();
+	FCompositeSection Section;
+	Section.SectionName = FName(TEXT("Default"));
+	Section.SetTime(0.0f);
+	Montage->CompositeSections.Add(Section);
+	Montage->SetCompositeLength(Length);
+	Montage->CompositeSections[0].Link(Montage, 0.0f);
+
+	Montage->PostEditChange();
+	Montage->MarkPackageDirty();
+
+	UE_LOG(LogODEditor, Log, TEXT("BuildRangeMontage: %s ← %s [%.2f~%.2f] x%.2f, 슬롯 %s, 길이 %.2f초"), *Montage->GetName(), *Sequence->GetName(), StartTime, EndTime, PlayRate, *SlotName.ToString(), Length);
+	return true;
+}
+
 float UODMontageEditorLibrary::GetSectionStartTime(const UAnimMontage* Montage, FName SectionName)
 {
 	if (!IsValid(Montage))
