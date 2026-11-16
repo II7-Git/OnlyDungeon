@@ -197,13 +197,15 @@ void AODPlayerCharacter::Input_Look(const FInputActionValue& Value)
 		return;
 	}
 
-	// 락온 중에는 카메라가 대상을 따라가므로 마우스 시점 입력을 받지 않는다.
+	const FVector2D Axis = Value.Get<FVector2D>();
+
+	// 락온 중에는 카메라가 대상을 따라가므로 시점을 돌리지 않고, 크게 휘두르면 대상을 바꾼다.
 	if (IsValid(LockOnComponent) && LockOnComponent->IsLockedOn())
 	{
+		LockOnComponent->HandleLookInput(Axis);
 		return;
 	}
 
-	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
 }
