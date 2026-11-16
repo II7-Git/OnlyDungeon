@@ -83,4 +83,7 @@ private:
 
 	/** 줄이기 전 이동 속도 (끝날 때 복구) */
 	float SavedMaxWalkSpeed = -1.0f;
+
+	/** 마시는 동안 숨긴 무기 (끝날 때 다시 보이게). 무기 종류와 관계없이 같은 모션을 쓰기 위해 숨긴다. */
+	TWeakObjectPtr<AActor> HiddenWeapon;
 };

@@ -14,6 +14,8 @@
 #include "Character/ODPotionComponent.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
+#include "Equipment/ODEquipmentComponent.h"
+#include "Equipment/ODWeaponActor.h"
 
 UODGameplayAbility_DrinkPotion::UODGameplayAbility_DrinkPotion(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -79,6 +81,19 @@ void UODGameplayAbility_DrinkPotion::ActivateAbility(const FGameplayAbilitySpecH
 	{
 		SavedMaxWalkSpeed = Character->GetCharacterMovement()->MaxWalkSpeed;
 		Character->GetCharacterMovement()->MaxWalkSpeed = SavedMaxWalkSpeed * MoveSpeedMultiplier;
+	}
+
+	// 무기와 관계없이 같은 마시기 모션을 쓰므로 마시는 동안 무기를 숨긴다.
+	if (const AActor* Avatar = GetAvatarActorFromActorInfo(); IsValid(Avatar))
+	{
+		if (const UODEquipmentComponent* Equipment = Avatar->FindComponentByClass<UODEquipmentComponent>())
+		{
+			if (AODWeaponActor* Weapon = Equipment->GetWeaponActor(); IsValid(Weapon) && !Weapon->IsHidden())
+			{
+				Weapon->SetActorHiddenInGame(true);
+				HiddenWeapon = Weapon;
+			}
+		}
 	}
 
 	if (IsValid(DrinkMontage))
@@ -190,6 +205,12 @@ void UODGameplayAbility_DrinkPotion::EndAbility(const FGameplayAbilitySpecHandle
 		}
 		SavedMaxWalkSpeed = -1.0f;
 	}
+
+	if (AActor* Weapon = HiddenWeapon.Get())
+	{
+		Weapon->SetActorHiddenInGame(false);
+	}
+	HiddenWeapon.Reset();
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
