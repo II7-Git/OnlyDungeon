@@ -201,6 +201,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Presentation", meta = (ClampMin = "0.01"))
 	float DeathEffectScale = 1.0f;
 
+	/** 쓰러짐 이펙트가 새 입자를 내는 시간. 지나면 멈추고 남은 입자만 사라진다. (반복형 이펙트가 시체에서 끝없이 튀지 않게) 0이면 이펙트가 알아서 끝남 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Presentation", meta = (ClampMin = "0.0", Units = "s"))
+	float DeathEffectDuration = 3.0f;
+
 	/** 쓰러질 때 주변 플레이어 화면 흔들림 (큰 적) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Presentation")
 	TSubclassOf<UCameraShakeBase> DeathCameraShake;

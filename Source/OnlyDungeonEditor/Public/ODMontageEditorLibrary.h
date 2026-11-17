@@ -42,6 +42,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "OD|Editor|Montage")
 	static bool BuildRangeMontage(UAnimMontage* Montage, UAnimSequenceBase* Sequence, float StartTime, float EndTime, FName SlotName, float PlayRate = 1.0f);
 
+	/**
+	 * 한 시퀀스의 여러 구간을 순서대로 이어 붙인 몽타주로 구성한다. 구간마다 재생 속도를 따로 줄 수 있다.
+	 * 기존 세그먼트·섹션은 지워지고 "Default" 섹션 하나가 된다. (노티파이는 유지)
+	 * 예: 예비 동작(보통 속도) → 한 자세를 아주 느리게 늘여 유지(회전 공격 중) → 마무리(보통 속도)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "OD|Editor|Montage")
+	static bool BuildMultiRangeMontage(UAnimMontage* Montage, UAnimSequenceBase* Sequence, const TArray<float>& StartTimes, const TArray<float>& EndTimes, const TArray<float>& PlayRates, FName SlotName);
+
 	/** 섹션 시작 시간(초) 조회. 없는 섹션이면 -1 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Editor|Montage")
 	static float GetSectionStartTime(const UAnimMontage* Montage, FName SectionName);

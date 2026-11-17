@@ -174,7 +174,15 @@ void AODEnemyCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	// 쓰러짐 연출
 	if (IsValid(DeathEffect))
 	{
-		UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, DeathEffect, GetActorLocation(), GetActorRotation(), FVector(DeathEffectScale));
+		UNiagaraComponent* Effect = UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, DeathEffect, GetActorLocation(), GetActorRotation(), FVector(DeathEffectScale));
+		if (IsValid(Effect) && DeathEffectDuration > 0.0f)
+		{
+			FTimerHandle StopHandle;
+			GetWorldTimerManager().SetTimer(StopHandle, FTimerDelegate::CreateWeakLambda(Effect, [Effect]()
+			{
+				Effect->Deactivate();
+			}), DeathEffectDuration, false);
+		}
 	}
 	if (DeathCameraShake)
 	{

@@ -51,6 +51,20 @@ struct FODComboStep
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Tracking", meta = (ClampMin = "0.0", Units = "deg/s"))
 	float TrackTurnRate = 180.0f;
 
+	/**
+	 * 섹션 시작 후 SpinDelay부터 SpinDuration 동안 몸 전체를 SpinRate로 계속 돈다. (회오리 회전 공격) 0이면 돌지 않는다.
+	 * 도는 동안은 이동 방향으로 몸을 돌리지 않는다. 전진(StepDistance)은 시작 시점의 정면으로 고정되므로, 회전하면서 처음 방향으로 직진한다.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Spin", meta = (ClampMin = "0.0", Units = "s"))
+	float SpinDuration = 0.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Spin", meta = (ClampMin = "0.0", Units = "s"))
+	float SpinDelay = 0.0f;
+
+	/** 회전 속도 (음수면 반대 방향) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Spin", meta = (Units = "deg/s"))
+	float SpinRate = 600.0f;
+
 	/** 이 타격의 콤보 입력 구간에서 파생 공격(강공 입력)으로 넘어갈 수 있는지 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Branch")
 	bool bAllowBranch = false;
@@ -150,6 +164,20 @@ private:
 	void TickTracking();
 
 	FTimerHandle TrackTimer;
+
+	/** 현재 타격의 회전을 예약한다. (SpinDuration > 0인 타격만) */
+	void StartSpin();
+	void BeginSpin();
+	void TickSpin();
+	/** 회전을 끝내고 이동 방향 회전 설정을 되돌린다. */
+	void StopSpin();
+
+	FTimerHandle SpinDelayTimer;
+	FTimerHandle SpinTimer;
+	float SpinRemaining = 0.0f;
+	double LastSpinTime = 0.0;
+	bool bSpinning = false;
+	bool bSavedOrientToMovement = true;
 	float TrackRemaining = 0.0f;
 	double LastTrackTime = 0.0;
 

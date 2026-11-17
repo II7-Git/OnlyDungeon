@@ -116,6 +116,59 @@ bool UODMontageEditorLibrary::BuildRangeMontage(UAnimMontage* Montage, UAnimSequ
 	return true;
 }
 
+bool UODMontageEditorLibrary::BuildMultiRangeMontage(UAnimMontage* Montage, UAnimSequenceBase* Sequence, const TArray<float>& StartTimes, const TArray<float>& EndTimes, const TArray<float>& PlayRates, FName SlotName)
+{
+	if (!IsValid(Montage) || !IsValid(Sequence) || SlotName.IsNone() || StartTimes.IsEmpty() || StartTimes.Num() != EndTimes.Num() || StartTimes.Num() != PlayRates.Num())
+	{
+		UE_LOG(LogODEditor, Error, TEXT("BuildMultiRangeMontage: 인자가 잘못되었습니다. (구간·속도 배열 길이, 슬롯 이름 확인)"));
+		return false;
+	}
+
+	const float SequenceLength = Sequence->GetPlayLength();
+	Montage->Modify();
+	if (Montage->SlotAnimTracks.IsEmpty())
+	{
+		Montage->AddSlot(SlotName);
+	}
+	Montage->SlotAnimTracks.SetNum(1);
+	Montage->SlotAnimTracks[0].SlotName = SlotName;
+
+	FAnimTrack& AnimTrack = Montage->SlotAnimTracks[0].AnimTrack;
+	AnimTrack.AnimSegments.Reset();
+	float Position = 0.0f;
+	for (int32 Index = 0; Index < StartTimes.Num(); ++Index)
+	{
+		const float Start = FMath::Clamp(StartTimes[Index], 0.0f, SequenceLength);
+		const float End = FMath::Clamp(EndTimes[Index], Start, SequenceLength);
+		if (End <= Start || PlayRates[Index] <= 0.0f)
+		{
+			UE_LOG(LogODEditor, Error, TEXT("BuildMultiRangeMontage: %d번째 구간이 잘못되었습니다."), Index);
+			return false;
+		}
+		FAnimSegment Segment;
+		Segment.SetAnimReference(Sequence, true);
+		Segment.StartPos = Position;
+		Segment.AnimStartTime = Start;
+		Segment.AnimEndTime = End;
+		Segment.AnimPlayRate = PlayRates[Index];
+		Position += Segment.GetLength();
+		AnimTrack.AnimSegments.Add(Segment);
+	}
+
+	Montage->CompositeSections.Reset();
+	FCompositeSection Section;
+	Section.SectionName = FName(TEXT("Default"));
+	Section.SetTime(0.0f);
+	Montage->CompositeSections.Add(Section);
+	Montage->SetCompositeLength(Position);
+	Montage->CompositeSections[0].Link(Montage, 0.0f);
+
+	Montage->PostEditChange();
+	Montage->MarkPackageDirty();
+	UE_LOG(LogODEditor, Log, TEXT("BuildMultiRangeMontage: %s ← %s 구간 %d개, 길이 %.2f초"), *Montage->GetName(), *Sequence->GetName(), StartTimes.Num(), Position);
+	return true;
+}
+
 float UODMontageEditorLibrary::GetSectionStartTime(const UAnimMontage* Montage, FName SectionName)
 {
 	if (!IsValid(Montage))

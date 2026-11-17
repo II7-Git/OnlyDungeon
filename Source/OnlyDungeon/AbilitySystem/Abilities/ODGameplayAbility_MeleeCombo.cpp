@@ -15,6 +15,7 @@
 #include "Equipment/ODEquipmentComponent.h"
 #include "GameplayEffect.h"
 #include "TimerManager.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 UODGameplayAbility_MeleeCombo::UODGameplayAbility_MeleeCombo(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -101,6 +102,7 @@ void UODGameplayAbility_MeleeCombo::EndAbility(const FGameplayAbilitySpecHandle 
 		World->GetTimerManager().ClearTimer(StepDelayTimer);
 		World->GetTimerManager().ClearTimer(TrackTimer);
 	}
+	StopSpin();
 	// 태스크 자체는 어빌리티 종료 시 엔진이 정리한다.
 	StepTask = nullptr;
 
@@ -342,10 +344,88 @@ void UODGameplayAbility_MeleeCombo::TickTracking()
 	}
 }
 
+void UODGameplayAbility_MeleeCombo::StartSpin()
+{
+	StopSpin();
+	UWorld* World = GetWorld();
+	if (!IsValid(World) || !ComboSteps.IsValidIndex(ComboIndex) || ComboSteps[ComboIndex].SpinDuration <= 0.0f)
+	{
+		return;
+	}
+	const float Delay = ComboSteps[ComboIndex].SpinDelay;
+	if (Delay > 0.0f)
+	{
+		World->GetTimerManager().SetTimer(SpinDelayTimer, this, &ThisClass::BeginSpin, Delay, false);
+	}
+	else
+	{
+		BeginSpin();
+	}
+}
+
+void UODGameplayAbility_MeleeCombo::BeginSpin()
+{
+	UWorld* World = GetWorld();
+	AODCharacterBase* Character = GetODCharacterFromActorInfo();
+	if (!IsValid(World) || !IsActive() || !IsValid(Character) || !ComboSteps.IsValidIndex(ComboIndex))
+	{
+		return;
+	}
+	// 도는 동안은 이동 방향으로 몸이 돌아가지 않게 한다. (전진 방향은 시작 시점에 고정)
+	if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement(); IsValid(Movement))
+	{
+		bSavedOrientToMovement = Movement->bOrientRotationToMovement;
+		Movement->bOrientRotationToMovement = false;
+	}
+	bSpinning = true;
+	SpinRemaining = ComboSteps[ComboIndex].SpinDuration;
+	LastSpinTime = World->GetTimeSeconds();
+	World->GetTimerManager().SetTimer(SpinTimer, this, &ThisClass::TickSpin, 1.0f / 60.0f, true);
+}
+
+void UODGameplayAbility_MeleeCombo::TickSpin()
+{
+	UWorld* World = GetWorld();
+	AODCharacterBase* Character = GetODCharacterFromActorInfo();
+	if (!IsValid(World) || !IsActive() || !IsValid(Character) || !ComboSteps.IsValidIndex(ComboIndex))
+	{
+		StopSpin();
+		return;
+	}
+	const double Now = World->GetTimeSeconds();
+	const float DeltaTime = FMath::Min(static_cast<float>(Now - LastSpinTime), SpinRemaining);
+	LastSpinTime = Now;
+	SpinRemaining -= DeltaTime;
+	Character->AddActorWorldRotation(FRotator(0.0f, ComboSteps[ComboIndex].SpinRate * DeltaTime, 0.0f));
+	if (SpinRemaining <= 0.0f)
+	{
+		StopSpin();
+	}
+}
+
+void UODGameplayAbility_MeleeCombo::StopSpin()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(SpinDelayTimer);
+		World->GetTimerManager().ClearTimer(SpinTimer);
+	}
+	if (!bSpinning)
+	{
+		return;
+	}
+	bSpinning = false;
+	if (AODCharacterBase* Character = GetODCharacterFromActorInfo(); IsValid(Character) && IsValid(Character->GetCharacterMovement()))
+	{
+		Character->GetCharacterMovement()->bOrientRotationToMovement = bSavedOrientToMovement;
+	}
+}
+
 void UODGameplayAbility_MeleeCombo::StartStepForward()
 {
 	// 타격마다 대상 추적 회전을 새로 시작한다. (전진보다 먼저: 전진 방향은 추적이 끝난 뒤의 정면)
 	StartTracking();
+	StartSpin();
 
 	// 이전 타격의 전진이 끝나기 전에 다음 타격으로 넘어가면 끊고 새 방향으로 다시 민다.
 	if (IsValid(StepTask))
