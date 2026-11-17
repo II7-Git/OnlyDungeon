@@ -99,6 +99,7 @@ void UODGameplayAbility_MeleeCombo::EndAbility(const FGameplayAbilitySpecHandle 
 	if (const UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(StepDelayTimer);
+		World->GetTimerManager().ClearTimer(TrackTimer);
 	}
 	// 태스크 자체는 어빌리티 종료 시 엔진이 정리한다.
 	StepTask = nullptr;
@@ -283,8 +284,69 @@ void UODGameplayAbility_MeleeCombo::RotateToInputDirection() const
 	}
 }
 
+void UODGameplayAbility_MeleeCombo::StartTracking()
+{
+	UWorld* World = GetWorld();
+	if (!IsValid(World) || !ComboSteps.IsValidIndex(ComboIndex))
+	{
+		return;
+	}
+	World->GetTimerManager().ClearTimer(TrackTimer);
+
+	const FODComboStep& Step = ComboSteps[ComboIndex];
+	if (Step.TrackTargetDuration <= 0.0f || Step.TrackTurnRate <= 0.0f)
+	{
+		return;
+	}
+	TrackRemaining = Step.TrackTargetDuration;
+	LastTrackTime = World->GetTimeSeconds();
+	// 회전은 짧은 동안만 필요하므로 Tick 대신 60Hz 타이머로 돈다.
+	World->GetTimerManager().SetTimer(TrackTimer, this, &ThisClass::TickTracking, 1.0f / 60.0f, true);
+}
+
+void UODGameplayAbility_MeleeCombo::TickTracking()
+{
+	UWorld* World = GetWorld();
+	AODCharacterBase* Character = GetODCharacterFromActorInfo();
+	if (!IsValid(World) || !IsActive() || !IsValid(Character) || !ComboSteps.IsValidIndex(ComboIndex))
+	{
+		if (IsValid(World))
+		{
+			World->GetTimerManager().ClearTimer(TrackTimer);
+		}
+		return;
+	}
+
+	// 타이머가 프레임을 건너뛰어도 실제 지난 시간만큼 돈다.
+	const double Now = World->GetTimeSeconds();
+	const float DeltaTime = static_cast<float>(Now - LastTrackTime);
+	LastTrackTime = Now;
+	TrackRemaining -= DeltaTime;
+
+	if (const AActor* Target = Character->GetLockOnTarget(); IsValid(Target))
+	{
+		const FVector ToTarget = (Target->GetActorLocation() - Character->GetActorLocation()).GetSafeNormal2D();
+		if (!ToTarget.IsNearlyZero())
+		{
+			const float CurrentYaw = Character->GetActorRotation().Yaw;
+			const float DesiredYaw = ToTarget.Rotation().Yaw;
+			const float MaxStep = ComboSteps[ComboIndex].TrackTurnRate * DeltaTime;
+			const float NewYaw = CurrentYaw + FMath::Clamp(FMath::FindDeltaAngleDegrees(CurrentYaw, DesiredYaw), -MaxStep, MaxStep);
+			Character->SetActorRotation(FRotator(0.0f, NewYaw, 0.0f));
+		}
+	}
+
+	if (TrackRemaining <= 0.0f)
+	{
+		World->GetTimerManager().ClearTimer(TrackTimer);
+	}
+}
+
 void UODGameplayAbility_MeleeCombo::StartStepForward()
 {
+	// 타격마다 대상 추적 회전을 새로 시작한다. (전진보다 먼저: 전진 방향은 추적이 끝난 뒤의 정면)
+	StartTracking();
+
 	// 이전 타격의 전진이 끝나기 전에 다음 타격으로 넘어가면 끊고 새 방향으로 다시 민다.
 	if (IsValid(StepTask))
 	{

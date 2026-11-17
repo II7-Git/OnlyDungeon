@@ -6,6 +6,8 @@
 #include "Character/ODCharacterBase.h"
 #include "GameFramework/Character.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Core/ODLogChannels.h"
 #include "Engine/World.h"
 #include "Equipment/ODWeaponActor.h"
@@ -49,6 +51,19 @@ void UODEquipmentComponent::EquipWeapon(UODWeaponData* NewWeaponData)
 		WeaponActor->InitializeFromData(NewWeaponData);
 		WeaponActor->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, NewWeaponData->AttachSocket);
 		WeaponActor->SetActorRelativeTransform(NewWeaponData->AttachOffset);
+	}
+
+	// 왼손 장식 메시 (판정 없음)
+	if (IsValid(NewWeaponData->OffhandMesh) && IsValid(Character->GetMesh()))
+	{
+		OffhandMeshComponent = NewObject<UStaticMeshComponent>(Character, NAME_None, RF_Transient);
+		OffhandMeshComponent->SetStaticMesh(NewWeaponData->OffhandMesh);
+		OffhandMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		OffhandMeshComponent->SetGenerateOverlapEvents(false);
+		OffhandMeshComponent->SetCanEverAffectNavigation(false);
+		OffhandMeshComponent->SetupAttachment(Character->GetMesh(), NewWeaponData->OffhandAttachSocket);
+		OffhandMeshComponent->SetRelativeTransform(NewWeaponData->OffhandAttachOffset);
+		OffhandMeshComponent->RegisterComponent();
 	}
 
 	// 2) 어빌리티 세트와 무기 타입 태그
@@ -137,6 +152,11 @@ void UODEquipmentComponent::UnequipWeapon()
 	{
 		WeaponActor->Destroy();
 	}
+	if (IsValid(OffhandMeshComponent))
+	{
+		OffhandMeshComponent->DestroyComponent();
+	}
+	OffhandMeshComponent = nullptr;
 
 	WeaponActor = nullptr;
 	WeaponData = nullptr;

@@ -40,6 +40,17 @@ struct FODComboStep
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Step", meta = (ClampMin = "0.0", Units = "s"))
 	float StepDelay = 0.0f;
 
+	/**
+	 * 섹션 시작 후 이 시간 동안 대상(락온 대상·AI 공격 대상) 쪽으로 천천히 돈다. 0이면 돌지 않는다.
+	 * 적의 큰 공격용: 예비 동작 동안 플레이어를 따라오다가 내려치기 직전에 방향이 고정되어, 타이밍 맞춘 회피가 통한다.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Tracking", meta = (ClampMin = "0.0", Units = "s"))
+	float TrackTargetDuration = 0.0f;
+
+	/** 추적 회전 속도 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Tracking", meta = (ClampMin = "0.0", Units = "deg/s"))
+	float TrackTurnRate = 180.0f;
+
 	/** 이 타격의 콤보 입력 구간에서 파생 공격(강공 입력)으로 넘어갈 수 있는지 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Combo|Branch")
 	bool bAllowBranch = false;
@@ -131,6 +142,16 @@ private:
 
 	/** StepDelay 대기 타이머 */
 	FTimerHandle StepDelayTimer;
+
+	/** 현재 타격의 대상 추적 회전을 시작한다. (TrackTargetDuration > 0인 타격만) */
+	void StartTracking();
+
+	/** 추적 회전 한 번 (짧은 주기 타이머) */
+	void TickTracking();
+
+	FTimerHandle TrackTimer;
+	float TrackRemaining = 0.0f;
+	double LastTrackTime = 0.0;
 
 	UFUNCTION()
 	void OnComboWindowEvent(FGameplayEventData Payload);

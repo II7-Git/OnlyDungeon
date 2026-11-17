@@ -11,6 +11,8 @@
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "AI/ODAIController.h"
+#include "Character/ODEnemyCombatComponent.h"
+#include "GameplayEffect.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODFieldSubsystem.h"
 #include "Core/ODLogChannels.h"
@@ -35,6 +37,8 @@ AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer
 	NameplateComponent->SetGenerateOverlapEvents(false);
 	NameplateComponent->SetCanEverAffectNavigation(false);
 	NameplateComponent->SetHiddenInGame(true);
+
+	CombatComponent = CreateDefaultSubobject<UODEnemyCombatComponent>(TEXT("EnemyCombat"));
 
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 360.0f, 0.0f);
@@ -148,6 +152,10 @@ void AODEnemyCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 {
 	Super::HandleOutOfHealth(DamageInstigator);
 	CombatTarget.Reset();
+	if (IsValid(CombatComponent))
+	{
+		CombatComponent->ResetCombatState();
+	}
 	RefreshAI(false);
 	RefreshNameplate();
 }
@@ -212,11 +220,15 @@ AActor* AODEnemyCharacter::UpdateCombatTarget()
 		bReturningHome = false;
 	}
 
-	// 너무 멀리 끌려왔으면 대상을 놓고 돌아간다.
-	if (DistanceFromSpawn > LeashRange)
+	// 구역 이탈: 자신이 너무 멀리 끌려왔거나, 싸우던 플레이어가 구역 밖으로 나갔으면 어그로를 풀고 돌아간다.
+	const AActor* CurrentTarget = GetCombatTarget();
+	const bool bTargetLeftArea = IsValid(CurrentTarget) && FVector::Dist2D(CurrentTarget->GetActorLocation(), GetSpawnLocation()) > LeashRange;
+	if (DistanceFromSpawn > LeashRange || bTargetLeftArea)
 	{
-		CombatTarget.Reset();
-		bReturningHome = true;
+		if (!bReturningHome)
+		{
+			Disengage();
+		}
 		return nullptr;
 	}
 
@@ -233,11 +245,57 @@ AActor* AODEnemyCharacter::UpdateCombatTarget()
 	// 싱글플레이: 대상 후보는 플레이어 하나
 	AODCharacterBase* PlayerCharacter = Cast<AODCharacterBase>(UGameplayStatics::GetPlayerPawn(this, 0));
 	if (IsValid(PlayerCharacter) && !PlayerCharacter->IsDead() && IsHostileTo(PlayerCharacter)
-		&& FVector::Dist2D(GetActorLocation(), PlayerCharacter->GetActorLocation()) <= AggroRange)
+		&& FVector::Dist2D(GetActorLocation(), PlayerCharacter->GetActorLocation()) <= AggroRange
+		&& FVector::Dist2D(PlayerCharacter->GetActorLocation(), GetSpawnLocation()) <= LeashRange)
 	{
 		CombatTarget = PlayerCharacter;
+		// 무리 어그로: 주변 동료도 함께 달려온다.
+		if (AllyAlertRadius > 0.0f)
+		{
+			if (UODFieldSubsystem* Field = GetWorld() ? GetWorld()->GetSubsystem<UODFieldSubsystem>() : nullptr)
+			{
+				Field->AlertNearbyEnemies(this, PlayerCharacter, AllyAlertRadius);
+			}
+		}
 	}
 	return GetCombatTarget();
+}
+
+bool AODEnemyCharacter::ReceiveAlert(AODCharacterBase* Target)
+{
+	if (!bCombatActive || IsDead() || bReturningHome || IsValid(GetCombatTarget()) || !IsValid(Target) || Target->IsDead() || !IsHostileTo(Target))
+	{
+		return false;
+	}
+	// 대상이 이미 구역 밖이면 따라가지 않는다.
+	if (FVector::Dist2D(Target->GetActorLocation(), GetSpawnLocation()) > LeashRange)
+	{
+		return false;
+	}
+	CombatTarget = Target;
+	return true;
+}
+
+void AODEnemyCharacter::Disengage()
+{
+	CombatTarget.Reset();
+	bReturningHome = true;
+	if (IsValid(CombatComponent))
+	{
+		CombatComponent->ResetCombatState();
+	}
+
+	// 소울라이크 규칙: 어그로가 풀리면 체력을 가득 회복한다. (Attribute는 GE로만 변경)
+	if (UODAbilitySystemComponent* ASC = GetODAbilitySystemComponent(); IsValid(ASC) && LeashResetEffect)
+	{
+		ASC->ApplyGameplayEffectToSelf(LeashResetEffect.GetDefaultObject(), 1.0f, ASC->MakeEffectContext());
+	}
+	UE_LOG(LogODAI, Log, TEXT("%s 구역 이탈 → 어그로 해제, 귀환"), *GetNameSafe(this));
+}
+
+FVector AODEnemyCharacter::GetPatrolPoint(int32 Index) const
+{
+	return PatrolPoints.IsValidIndex(Index) ? SpawnTransform.TransformPosition(PatrolPoints[Index]) : GetSpawnLocation();
 }
 
 void AODEnemyCharacter::RefreshPhase()
@@ -281,6 +339,10 @@ void AODEnemyCharacter::Revive()
 {
 	Super::Revive();
 	CombatTarget.Reset();
+	if (IsValid(CombatComponent))
+	{
+		CombatComponent->ResetCombatState();
+	}
 	bReturningHome = false;
 	SetCombatActive(!bStartDormant);
 	RefreshPhase();

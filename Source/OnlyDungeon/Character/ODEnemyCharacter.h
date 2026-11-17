@@ -8,6 +8,9 @@
 #include "ODEnemyCharacter.generated.h"
 
 class AODEnemyCharacter;
+class UAnimMontage;
+class UGameplayEffect;
+class UODEnemyCombatComponent;
 class UStateTree;
 class UWidgetComponent;
 struct FOnAttributeChangeData;
@@ -26,6 +29,18 @@ struct FODEnemyPhase
 	FGameplayTag PhaseTag;
 };
 
+/** 플레이어를 발견하기 전 행동 (배치마다 지정) */
+UENUM(BlueprintType)
+enum class EODEnemyIdleBehavior : uint8
+{
+	/** 시작 위치에 서 있는다. */
+	Stand,
+	/** 순찰 지점(PatrolPoints)을 차례로 걷는다. */
+	Patrol,
+	/** 시체처럼 쓰러져 있다가 가까이 오면 일어나 덮친다. (AmbushLoopMontage·AmbushGetUpMontage 필요) */
+	Ambush,
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FODEnemyCombatActiveSignature, AODEnemyCharacter*, Enemy, bool, bActive);
 
 /**
@@ -37,6 +52,9 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FODEnemyCombatActiveSignature, AODE
  *   GetLockOnTarget()이 공격 대상을 돌려주므로 공격 어빌리티가 대상 쪽으로 나간다.
  * - 보스 페이즈: Phases에 따라 체력 비율로 State.Phase.* 태그를 바꾼다. StateTree가 이 태그로 패턴을 고른다.
  * - 적은 항상 Mode.Boss 태그를 가진다. (강공격·방어 어빌리티가 이 태그를 요구)
+ * - 공격 패턴·템포는 적 전투 컴포넌트(UODEnemyCombatComponent)가 정한다.
+ * - 소울라이크 몬스터 규칙: 발견하면 주변 동료도 함께 어그로(AllyAlertRadius), 플레이어나 자신이 구역(시작 위치에서 LeashRange)을 벗어나면
+ *   어그로를 풀고 돌아가며 체력을 회복(LeashResetEffect). 발견 전 행동은 서 있기·순찰·매복(쓰러져 있다 기습) 중 배치마다 고른다.
  * - 일반 몬스터는 머리 위 이름표(이름·체력)를 띄운다: 플레이어가 가까이 있거나, 플레이어와 싸우는 중이거나, 피해를 입은 상태일 때.
  *   보스는 bShowNameplate를 꺼서 이름표 대신 화면 하단 보스 체력 바만 쓴다.
  */
@@ -78,6 +96,25 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Enemy")
 	AActor* GetCombatTarget() const;
 
+	/**
+	 * 동료가 대상을 발견했다는 알림. 싸울 수 있고 대상이 없으면 그 대상을 잡는다. (알림을 다시 퍼뜨리지는 않는다)
+	 * @return 대상을 새로 잡았으면 참
+	 */
+	bool ReceiveAlert(AODCharacterBase* Target);
+
+	/** 대상을 놓고 시작 위치로 돌아가는 중인지 */
+	bool IsReturningHome() const { return bReturningHome; }
+
+	UODEnemyCombatComponent* GetCombatComponent() const { return CombatComponent; }
+
+	EODEnemyIdleBehavior GetIdleBehavior() const { return IdleBehavior; }
+	int32 GetNumPatrolPoints() const { return PatrolPoints.Num(); }
+	/** 순찰 지점의 월드 위치 (PatrolPoints는 시작 위치 기준) */
+	FVector GetPatrolPoint(int32 Index) const;
+	float GetPatrolWaitTime() const { return PatrolWaitTime; }
+	UAnimMontage* GetAmbushLoopMontage() const { return AmbushLoopMontage; }
+	UAnimMontage* GetAmbushGetUpMontage() const { return AmbushGetUpMontage; }
+
 	FVector GetSpawnLocation() const { return SpawnTransform.GetLocation(); }
 
 	UStateTree* GetStateTree() const { return StateTree; }
@@ -110,9 +147,41 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|AI", meta = (ClampMin = "0.0", Units = "cm"))
 	float LeashRange = 2500.0f;
 
+	/** 대상을 발견하면 이 거리 안의 동료도 같은 대상을 잡는다. 0이면 알리지 않는다. (보스는 0) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|AI", meta = (ClampMin = "0.0", Units = "cm"))
+	float AllyAlertRadius = 0.0f;
+
+	/** 구역을 벗어나 어그로가 풀릴 때 적용할 GE (체력 가득 회복). 비우면 회복하지 않는다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|AI")
+	TSubclassOf<UGameplayEffect> LeashResetEffect;
+
+	/** 플레이어를 발견하기 전 행동 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|Idle")
+	EODEnemyIdleBehavior IdleBehavior = EODEnemyIdleBehavior::Stand;
+
+	/** 순찰 지점 (시작 위치 기준 상대 위치). 레벨에서 위젯으로 옮길 수 있다. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|Idle", meta = (MakeEditWidget, EditCondition = "IdleBehavior == EODEnemyIdleBehavior::Patrol"))
+	TArray<FVector> PatrolPoints;
+
+	/** 순찰 지점마다 멈춰 있는 시간 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|Idle", meta = (ClampMin = "0.0", Units = "s", EditCondition = "IdleBehavior == EODEnemyIdleBehavior::Patrol"))
+	float PatrolWaitTime = 2.0f;
+
+	/** 매복: 쓰러져 있는 자세 (반복 섹션을 가진 몽타주) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Idle")
+	TObjectPtr<UAnimMontage> AmbushLoopMontage;
+
+	/** 매복: 일어나는 동작 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Idle")
+	TObjectPtr<UAnimMontage> AmbushGetUpMontage;
+
 	/** 보스 페이즈 (비우면 페이즈 없음). 체력 비율이 높은 순서로 둔다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Phase")
 	TArray<FODEnemyPhase> Phases;
+
+	/** 공격 패턴 선택·템포 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Enemy|AI")
+	TObjectPtr<UODEnemyCombatComponent> CombatComponent;
 
 	/** 머리 위 이름표 (화면 공간 위젯) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Enemy|UI")
@@ -132,6 +201,9 @@ protected:
 
 private:
 	void SetCombatActive(bool bNewActive);
+
+	/** 어그로를 풀고 시작 위치로 돌아간다. (구역 이탈) 체력을 회복하고 전투 상태를 초기화한다. */
+	void Disengage();
 
 	/** 체력 비율에 맞는 페이즈 태그로 바꾼다. */
 	void RefreshPhase();

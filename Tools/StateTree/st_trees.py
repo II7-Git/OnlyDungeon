@@ -44,3 +44,29 @@ BOSS = [
     S('P1_Idle', tasks=[('Home', {})], trans=[DONE]),
     S('P1_Rest', tasks=[('Delay', {'duration': 1.2})], trans=[DONE]),
 ]
+
+# ---- 패턴 기반 AI (적 전투 컴포넌트 + 패턴 데이터 DA_Pattern_*). 2026-11-17
+# 우선순위: 경직 → 빈틈 공략 → 공격(공통 간격·쿨타임·사거리) → 멀면 추격 → 간 보기(주위 돌기) → 발견 전 행동
+GOLEM = [
+    S('Stunned', conds=[('HasTag', {'tag': tag('State.Stunned')})], tasks=[('Delay', {'duration': 0.3})], trans=[DONE]),
+    S('Punish', conds=[('Opening', {'approachSlack': 300.0})],
+      tasks=[('Pattern', {'bPunish': True, 'approachSlack': 300.0, 'approachTimeout': 1.5})], trans=[DONE]),
+    S('Attack', conds=[('CanAttack', {'approachSlack': 500.0})],
+      tasks=[('Pattern', {'approachSlack': 500.0, 'approachTimeout': 3.0})], trans=[DONE]),
+    S('Chase', conds=[('InRange', {'maxRange': 1100.0, 'bInvert': True}), ('HasTarget', {})],
+      tasks=[('Chase', {'acceptanceRadius': 700.0})], trans=[DONE]),
+    S('Strafe', conds=[('HasTarget', {})], tasks=[('Strafe', {'minDuration': 0.6})], trans=[DONE]),
+    S('Idle', tasks=[('IdleBehavior', {})], trans=[DONE]),
+]
+
+MINION_PATTERN = [
+    S('Stunned', conds=[('HasTag', {'tag': tag('State.Stunned')})], tasks=[('Delay', {'duration': 0.3})], trans=[DONE]),
+    S('Punish', conds=[('Opening', {'approachSlack': 200.0})],
+      tasks=[('Pattern', {'bPunish': True, 'approachSlack': 200.0, 'approachTimeout': 1.2})], trans=[DONE]),
+    S('Attack', conds=[('CanAttack', {'approachSlack': 400.0})],
+      tasks=[('Pattern', {'approachSlack': 400.0, 'approachTimeout': 2.5})], trans=[DONE]),
+    S('Chase', conds=[('InRange', {'maxRange': 700.0, 'bInvert': True}), ('HasTarget', {})],
+      tasks=[('Chase', {'acceptanceRadius': 400.0})], trans=[DONE]),
+    S('Strafe', conds=[('HasTarget', {})], tasks=[('Strafe', {'minDuration': 0.8})], trans=[DONE]),
+    S('Idle', tasks=[('IdleBehavior', {})], trans=[DONE]),
+]

@@ -26,11 +26,16 @@ COND = {
     'HasTarget': OD + 'ODStateTreeHasTargetCondition',
     'InRange': OD + 'ODStateTreeTargetInRangeCondition',
     'HasTag': OD + 'ODStateTreeHasTagCondition',
+    'CanAttack': OD + 'ODStateTreeCanAttackCondition',
+    'Opening': OD + 'ODStateTreeTargetOpeningCondition',
 }
 TASK = {
     'Chase': OD + 'ODStateTreeChaseTargetTask',
     'Home': OD + 'ODStateTreeReturnHomeTask',
     'Ability': OD + 'ODStateTreeActivateAbilityTask',
+    'Pattern': OD + 'ODStateTreeExecutePatternTask',
+    'Strafe': OD + 'ODStateTreeStrafeTask',
+    'IdleBehavior': OD + 'ODStateTreeIdleBehaviorTask',
     'Delay': '/Script/StateTreeModule.StateTreeDelayTask',
 }
 

@@ -58,6 +58,18 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Visual")
 	FTransform AbilityAttachOffset = FTransform::Identity;
 
+	/** 왼손에 함께 드는 장식용 메시 (예: 골렘의 방패). 판정 없이 보이기만 한다. 비우면 없음 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Offhand")
+	TObjectPtr<UStaticMesh> OffhandMesh;
+
+	/** 왼손 메시를 붙일 소켓(본) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Offhand")
+	FName OffhandAttachSocket = TEXT("hand_l");
+
+	/** 왼손 메시 위치·회전 보정 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Offhand")
+	FTransform OffhandAttachOffset = FTransform::Identity;
+
 	/** 장착 시 부여할 어빌리티 세트 (공격·방어·스킬, 스탯 GE) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Ability")
 	TObjectPtr<UODAbilitySet> AbilitySet;
