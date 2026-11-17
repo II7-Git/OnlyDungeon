@@ -14,6 +14,7 @@ class UODAttributeSet_Health;
 class UODAttributeSet_Combat;
 class UODAbilitySet;
 class UODEquipmentComponent;
+class UNiagaraSystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODOnCharacterDeathSignature, AODCharacterBase*, DeadCharacter);
 
@@ -56,6 +57,9 @@ public:
 	/** 화면에 표시할 이름 (비어 있으면 클래스 이름) */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Character")
 	FText GetDisplayName() const;
+
+	UNiagaraSystem* GetHitImpactEffect() const { return HitImpactEffect; }
+	float GetHitImpactScale() const { return HitImpactScale; }
 
 	//~ IGenericTeamAgentInterface
 	virtual FGenericTeamId GetGenericTeamId() const override { return FGenericTeamId(TeamId); }
@@ -116,6 +120,14 @@ protected:
 	/** 화면에 표시할 이름 (HUD의 대상 체력 바 등) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Character")
 	FText DisplayName;
+
+	/** 근접 공격에 맞았을 때 맞은 지점에서 재생할 이펙트 (사람·해골은 피, 골렘은 불꽃 스파크). GameplayCue.Hit가 재생한다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character|Hit")
+	TObjectPtr<UNiagaraSystem> HitImpactEffect;
+
+	/** 피격 이펙트 크기 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character|Hit", meta = (ClampMin = "0.01"))
+	float HitImpactScale = 1.0f;
 
 	/** 시작할 때 부여할 기본 어빌리티·이펙트 세트 (초기 수치 GE 포함) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Ability")

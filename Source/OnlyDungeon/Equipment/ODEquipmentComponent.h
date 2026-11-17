@@ -9,10 +9,11 @@
 
 class AODWeaponActor;
 class UODWeaponData;
+class UStaticMeshComponent;
 
 /**
  * 캐릭터의 장비를 관리한다. (현재는 오른손 무기 슬롯만. 다른 슬롯은 장비 단계에서 확장)
- * - 장착: 무기 액터 스폰·부착, 어빌리티 세트 부여, 무기 타입 태그 추가, 이동 애니메이션 레이어 연결
+ * - 장착: 무기 액터 스폰·부착, (있으면) 왼손 장식 메시 부착, 어빌리티 세트 부여, 무기 타입 태그 추가, 이동 애니메이션 레이어 연결
  * - 해제: 위의 모든 것을 회수
  * - 틱하지 않는다. 기본 무기는 소유 캐릭터가 ASC 초기화를 마친 뒤 EquipDefaultWeapon으로 장착한다.
  */
@@ -58,6 +59,10 @@ protected:
 private:
 	UPROPERTY()
 	TObjectPtr<AODWeaponActor> WeaponActor;
+
+	/** 무기 데이터의 왼손 장식 메시 (방패 등) */
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> OffhandMeshComponent;
 
 	UPROPERTY()
 	TObjectPtr<UODWeaponData> WeaponData;

@@ -32,6 +32,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "OD|Editor|Montage")
 	static bool BuildSectionedMontage(UAnimMontage* Montage, const TArray<UAnimSequenceBase*>& Sequences, const TArray<FName>& SectionNames, const TArray<FName>& NextSectionNames);
 
+	/**
+	 * 시퀀스의 일부 구간(StartTime~EndTime)만 재생하는 몽타주로 구성한다. 슬롯 이름도 바꾼다.
+	 * 기존 세그먼트·섹션은 지워지고 "Default" 섹션 하나가 된다. (노티파이는 유지)
+	 * 긴 원본 모션에서 필요한 부분만 쓸 때 사용한다. (예: 8초 마시기 모션의 들이켜는 구간)
+	 * @param SlotName  몽타주가 재생될 슬롯 (예: UpperBody = 상체만)
+	 * @param PlayRate  구간 재생 속도 (몽타주 길이가 이만큼 줄어든다)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "OD|Editor|Montage")
+	static bool BuildRangeMontage(UAnimMontage* Montage, UAnimSequenceBase* Sequence, float StartTime, float EndTime, FName SlotName, float PlayRate = 1.0f);
+
+	/**
+	 * 한 시퀀스의 여러 구간을 순서대로 이어 붙인 몽타주로 구성한다. 구간마다 재생 속도를 따로 줄 수 있다.
+	 * 기존 세그먼트·섹션은 지워지고 "Default" 섹션 하나가 된다. (노티파이는 유지)
+	 * 예: 예비 동작(보통 속도) → 한 자세를 아주 느리게 늘여 유지(회전 공격 중) → 마무리(보통 속도)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "OD|Editor|Montage")
+	static bool BuildMultiRangeMontage(UAnimMontage* Montage, UAnimSequenceBase* Sequence, const TArray<float>& StartTimes, const TArray<float>& EndTimes, const TArray<float>& PlayRates, FName SlotName);
+
 	/** 섹션 시작 시간(초) 조회. 없는 섹션이면 -1 */
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Editor|Montage")
 	static float GetSectionStartTime(const UAnimMontage* Montage, FName SectionName);

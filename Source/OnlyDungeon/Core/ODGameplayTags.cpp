@@ -34,6 +34,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Stunned, "State.Stunned", "경직 (강인도 붕괴, 패링당함 등)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Invulnerable, "State.Invulnerable", "무적 (회피 무적 시간 등)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_LockOn, "State.LockOn", "락온 중");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Drinking, "State.Drinking", "회복 물약을 마시는 중");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_1, "State.Phase.1", "보스 1페이즈");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_2, "State.Phase.2", "보스 2페이즈 (체력이 일정 비율 이하)");
 
@@ -54,10 +55,16 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Damage, "Data.Damage", "SetByCaller: 기본 피해량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_PoiseDamage, "Data.PoiseDamage", "SetByCaller: 강인도 피해량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_StaminaRegen, "Data.StaminaRegen", "SetByCaller: 이번 회복 틱의 스태미나 회복량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Heal, "Data.Heal", "SetByCaller: 이번 회복 틱의 체력 회복량 (물약)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Item, "Ability.Item", "아이템 사용 어빌리티 (물약 등). 행동(Ability.Action)과 구분");
 
 	// ---------- 쿨다운 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Skill_1, "Cooldown.Skill.1", "스킬 1 쿨다운");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Skill_2, "Cooldown.Skill.2", "스킬 2 쿨다운");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Boss_Intro, "Event.Boss.Intro", "보스가 전투를 시작함 (등장 포효)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Boss_PhaseChange, "Event.Boss.PhaseChange", "보스가 다음 페이즈로 넘어감 (전환 포효)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Hit, "GameplayCue.Hit", "근접 공격 피격 이펙트 (피해 GE 실행 시, 맞은 캐릭터의 HitImpactEffect)");
 
 	// ---------- 무기 종류 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Type_OneHandSword, "Weapon.Type.OneHandSword", "한손검");

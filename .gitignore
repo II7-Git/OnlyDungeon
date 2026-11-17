@@ -86,3 +86,6 @@ Content/
 # Claude Code 개인 설정 (공유 설정 .claude/settings.json은 추적 가능)
 .claude/settings.local.json
 Docs/Progress.md
+
+# 외부에서 받은 원본 에셋(FBX 등) 보관 폴더. 바이너리라 추적하지 않는다.
+Import/

@@ -38,6 +38,7 @@
 #include "Character/ODEnemyCharacter.h"
 #include "Core/ODBossEncounterSubsystem.h"
 #include "Character/ODLockOnComponent.h"
+#include "Character/ODPotionComponent.h"
 #include "Interaction/ODInteractionComponent.h"
 #include "Core/ODGameplayTags.h"
 #include "Equipment/ODEquipmentComponent.h"
@@ -94,6 +95,8 @@ namespace ODHUD
 			{ TEXT("State.Invulnerable"), TEXT("무적") },
 			{ TEXT("State.Stunned"), TEXT("경직") },
 			{ TEXT("State.Dead"), TEXT("사망") },
+			{ TEXT("State.Drinking"), TEXT("물약 마시는 중") },
+			{ TEXT("State.LockOn"), TEXT("락온") },
 		};
 		const FString* Label = Labels.Find(Tag.GetTagName());
 		return Label ? *Label : Tag.ToString();
@@ -263,7 +266,39 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 		AddSlot(0, 1, nullptr);
 		AddSlot(1, 0, nullptr);
 		AddSlot(1, 2, RightHandText);
-		AddSlot(2, 1, nullptr);
+
+		// 아래 슬롯: 회복 물약 (다크소울 에스트 병처럼 이름과 남은 개수)
+		{
+			UVerticalBox* ItemBox = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ItemSlot"));
+			ItemNameText = MakeText(Tree, 9, TextColor, TEXT("ItemNameText"));
+			ItemNameText->SetText(NSLOCTEXT("OnlyDungeon", "HUDPotionName", "회복 물약"));
+			ItemNameText->SetJustification(ETextJustify::Center);
+			ItemCountText = MakeText(Tree, 18, FLinearColor(0.95f, 0.85f, 0.55f), TEXT("ItemCountText"));
+			ItemCountText->SetJustification(ETextJustify::Center);
+			if (UVerticalBoxSlot* NameSlot = ItemBox->AddChildToVerticalBox(ItemNameText))
+			{
+				NameSlot->SetHorizontalAlignment(HAlign_Center);
+			}
+			if (UVerticalBoxSlot* CountSlot = ItemBox->AddChildToVerticalBox(ItemCountText))
+			{
+				CountSlot->SetHorizontalAlignment(HAlign_Center);
+			}
+
+			USizeBox* Cell = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+			Cell->SetWidthOverride(76.0f);
+			Cell->SetHeightOverride(76.0f);
+			UBorder* Frame = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
+			Frame->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.45f));
+			Frame->SetPadding(FMargin(4.0f));
+			Frame->SetHorizontalAlignment(HAlign_Center);
+			Frame->SetVerticalAlignment(VAlign_Center);
+			Frame->SetContent(ItemBox);
+			Cell->AddChild(Frame);
+			if (UGridSlot* GridSlot = Grid->AddChildToGrid(Cell, 2, 1))
+			{
+				GridSlot->SetPadding(FMargin(3.0f));
+			}
+		}
 	}
 
 	// ---- 아래 가운데: 대상 체력 (보스 바 형식) ----
@@ -294,6 +329,30 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 		TargetLag = Lag;
 		Panel->AddChildToVerticalBox(Box);
 		Panel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	// ---- 가운데 위: 보스 이름, 가운데: 승리 문구 (평소엔 숨김) ----
+	{
+		BossTitleText = MakeText(Tree, 40, FLinearColor(0.92f, 0.86f, 0.72f), TEXT("BossTitleText"));
+		BossTitleText->SetJustification(ETextJustify::Center);
+		if (UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(BossTitleText))
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.5f, 0.3f));
+			CanvasSlot->SetAlignment(FVector2D(0.5, 0.5));
+			CanvasSlot->SetAutoSize(true);
+		}
+		BossTitleText->SetVisibility(ESlateVisibility::Collapsed);
+
+		VictoryText = MakeText(Tree, 46, FLinearColor(0.95f, 0.78f, 0.35f), TEXT("VictoryText"));
+		VictoryText->SetText(NSLOCTEXT("OnlyDungeon", "HUDVictory", "강적 격파"));
+		VictoryText->SetJustification(ETextJustify::Center);
+		if (UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(VictoryText))
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.5f, 0.32f));
+			CanvasSlot->SetAlignment(FVector2D(0.5, 0.5));
+			CanvasSlot->SetAutoSize(true);
+		}
+		VictoryText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
 	// ---- 가운데: 사망 문구 ----
@@ -405,6 +464,13 @@ void UODHUDWidget::HandleBossEncounterStarted(AODEnemyCharacter* Boss)
 	bBossBarPinned = false;
 	SetTarget(Boss);
 	bBossBarPinned = true;
+
+	// 보스 이름을 크게 띄운다. (입장 컷신이 끝나고 포효할 때)
+	if (IsValid(BossTitleText))
+	{
+		BossTitleText->SetText(Boss->GetDisplayName());
+		ShowBanner(BossTitleText, BossTitleStart, 0.3f);
+	}
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(TargetHideTimer);
@@ -416,12 +482,93 @@ void UODHUDWidget::HandleBossEncounterEnded(bool bVictory)
 	bBossBarPinned = false;
 	if (bVictory)
 	{
+		// 느린 화면이 끝나갈 즈음 승리 문구
+		ShowBanner(VictoryText, VictoryStart, 1.0f);
 		// 빈 체력 바를 잠시 보여 준 뒤 숨긴다.
 		StartTargetHideTimer();
 	}
 	else
 	{
 		ClearTarget();
+	}
+}
+
+namespace ODHUDBanner
+{
+	constexpr float FadeIn = 0.6f;
+	constexpr float Hold = 2.2f;
+	constexpr float FadeOut = 1.0f;
+}
+
+void UODHUDWidget::ShowBanner(UTextBlock* Banner, double& OutStartTime, float Delay)
+{
+	UWorld* World = GetWorld();
+	if (!IsValid(Banner) || !IsValid(World))
+	{
+		return;
+	}
+	OutStartTime = World->GetRealTimeSeconds() + Delay;
+	Banner->SetRenderOpacity(0.0f);
+	Banner->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (!World->GetTimerManager().IsTimerActive(BannerTimer))
+	{
+		World->GetTimerManager().SetTimer(BannerTimer, this, &ThisClass::UpdateBanners, 0.03f, true);
+	}
+}
+
+float UODHUDWidget::GetBannerOpacity(double StartTime, double Now) const
+{
+	if (StartTime < 0.0)
+	{
+		return -1.0f;
+	}
+	const float T = static_cast<float>(Now - StartTime);
+	if (T < 0.0f)
+	{
+		return 0.0f;
+	}
+	if (T < ODHUDBanner::FadeIn)
+	{
+		return T / ODHUDBanner::FadeIn;
+	}
+	if (T < ODHUDBanner::FadeIn + ODHUDBanner::Hold)
+	{
+		return 1.0f;
+	}
+	const float Out = T - ODHUDBanner::FadeIn - ODHUDBanner::Hold;
+	return Out < ODHUDBanner::FadeOut ? 1.0f - Out / ODHUDBanner::FadeOut : -1.0f;
+}
+
+void UODHUDWidget::UpdateBanners()
+{
+	UWorld* World = GetWorld();
+	if (!IsValid(World))
+	{
+		return;
+	}
+	const double Now = World->GetRealTimeSeconds();
+	bool bAnyActive = false;
+	const auto Apply = [&](UTextBlock* Banner, double& StartTime)
+	{
+		if (!IsValid(Banner) || StartTime < 0.0)
+		{
+			return;
+		}
+		const float Opacity = GetBannerOpacity(StartTime, Now);
+		if (Opacity < 0.0f)
+		{
+			Banner->SetVisibility(ESlateVisibility::Collapsed);
+			StartTime = -1.0;
+			return;
+		}
+		Banner->SetRenderOpacity(Opacity);
+		bAnyActive = true;
+	};
+	Apply(BossTitleText, BossTitleStart);
+	Apply(VictoryText, VictoryStart);
+	if (!bAnyActive)
+	{
+		World->GetTimerManager().ClearTimer(BannerTimer);
 	}
 }
 
@@ -435,6 +582,7 @@ void UODHUDWidget::NativeDestruct()
 		TimerManager.ClearTimer(TargetHideTimer);
 		TimerManager.ClearTimer(FailureHideTimer);
 		TimerManager.ClearTimer(LockOnMarkerTimer);
+		TimerManager.ClearTimer(BannerTimer);
 
 		if (UODBossEncounterSubsystem* Encounter = World->GetSubsystem<UODBossEncounterSubsystem>())
 		{
@@ -492,6 +640,12 @@ void UODHUDWidget::BindPawnComponents(APawn* Pawn)
 		Character->OnDeath.AddUniqueDynamic(this, &ThisClass::HandleObservedPawnDeath);
 	}
 	RefreshDeathText();
+	if (UODPotionComponent* Potion = Pawn->FindComponentByClass<UODPotionComponent>())
+	{
+		ObservedPotion = Potion;
+		Potion->OnChargesChanged.AddUniqueDynamic(this, &ThisClass::HandlePotionChargesChanged);
+		HandlePotionChargesChanged(Potion->GetCharges(), Potion->GetMaxCharges());
+	}
 	if (UODLockOnComponent* LockOn = Pawn->FindComponentByClass<UODLockOnComponent>())
 	{
 		ObservedLockOn = LockOn;
@@ -534,10 +688,29 @@ void UODHUDWidget::UnbindPawnComponents()
 	{
 		LockOn->OnTargetChanged.RemoveDynamic(this, &ThisClass::HandleLockOnTargetChanged);
 	}
+	if (UODPotionComponent* Potion = ObservedPotion.Get())
+	{
+		Potion->OnChargesChanged.RemoveDynamic(this, &ThisClass::HandlePotionChargesChanged);
+	}
+	ObservedPotion.Reset();
 	ObservedModeComponent.Reset();
 	ObservedInteraction.Reset();
 	ObservedLockOn.Reset();
 	HandleLockOnTargetChanged(nullptr);
+}
+
+void UODHUDWidget::HandlePotionChargesChanged(int32 CurrentCharges, int32 MaxCharges)
+{
+	if (IsValid(ItemCountText))
+	{
+		ItemCountText->SetText(FText::AsNumber(CurrentCharges));
+		// 다 쓰면 흐리게 (다크소울의 빈 에스트 병처럼)
+		ItemCountText->SetColorAndOpacity(FSlateColor(CurrentCharges > 0 ? FLinearColor(0.95f, 0.85f, 0.55f) : FLinearColor(0.4f, 0.4f, 0.4f)));
+	}
+	if (IsValid(ItemNameText))
+	{
+		ItemNameText->SetColorAndOpacity(FSlateColor(CurrentCharges > 0 ? FLinearColor(0.85f, 0.82f, 0.75f) : FLinearColor(0.4f, 0.4f, 0.4f)));
+	}
 }
 
 void UODHUDWidget::HandleLockOnTargetChanged(AActor* NewTarget)

@@ -147,6 +147,140 @@ void UODLockOnComponent::ApplyCharacterFacing(bool bLockedOn) const
 	Movement->bUseControllerDesiredRotation = bLockedOn;
 }
 
+void UODLockOnComponent::GatherCandidates(TArray<AActor*>& OutCandidates) const
+{
+	OutCandidates.Reset();
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	const APlayerController* PC = IsValid(OwnerPawn) ? Cast<APlayerController>(OwnerPawn->GetController()) : nullptr;
+	const UWorld* World = GetWorld();
+	if (!PC || !World)
+	{
+		return;
+	}
+
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	PC->GetPlayerViewPoint(ViewLocation, ViewRotation);
+
+	TArray<FOverlapResult> Overlaps;
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ODLockOnGather), false, OwnerPawn);
+	World->OverlapMultiByObjectType(Overlaps, OwnerPawn->GetActorLocation(), FQuat::Identity, FCollisionObjectQueryParams(ECC_Pawn), FCollisionShape::MakeSphere(SearchRadius), QueryParams);
+
+	const AODCharacterBase* OwnerCharacter = Cast<AODCharacterBase>(OwnerPawn);
+	OutCandidates.Reserve(Overlaps.Num());
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		AODCharacterBase* Candidate = Cast<AODCharacterBase>(Overlap.GetActor());
+		if (!IsValid(Candidate) || Candidate == OwnerPawn || Candidate->IsDead() || OutCandidates.Contains(Candidate))
+		{
+			continue;
+		}
+		if (OwnerCharacter && !OwnerCharacter->IsHostileTo(Candidate))
+		{
+			continue;
+		}
+
+		// 벽 뒤의 대상은 잡지 않는다.
+		FCollisionQueryParams SightParams(SCENE_QUERY_STAT(ODLockOnSight), false, OwnerPawn);
+		SightParams.AddIgnoredActor(Candidate);
+		if (World->LineTraceTestByChannel(ViewLocation, Candidate->GetActorLocation() + FVector(0.0, 0.0, TargetHeightOffset), ECC_Visibility, SightParams))
+		{
+			continue;
+		}
+		OutCandidates.Add(Candidate);
+	}
+}
+
+void UODLockOnComponent::HandleLookInput(const FVector2D& LookAxis)
+{
+	const UWorld* World = GetWorld();
+	if (!IsLockedOn() || !World || FMath::IsNearlyZero(LookAxis.X))
+	{
+		return;
+	}
+
+	const double Now = World->GetTimeSeconds();
+	if (LastSwitchTime >= 0.0 && Now - LastSwitchTime < SwitchCooldown)
+	{
+		FlickAccumulated = 0.0f;
+		return;
+	}
+
+	// 시간 창이 지났거나 방향이 바뀌면 누적을 새로 시작한다.
+	const bool bWindowExpired = FlickWindowStart < 0.0 || Now - FlickWindowStart > SwitchFlickWindow;
+	const bool bDirectionChanged = FlickAccumulated * LookAxis.X < 0.0f;
+	if (bWindowExpired || bDirectionChanged)
+	{
+		FlickAccumulated = 0.0f;
+		FlickWindowStart = Now;
+	}
+
+	FlickAccumulated += LookAxis.X;
+	if (FMath::Abs(FlickAccumulated) >= SwitchFlickThreshold)
+	{
+		const float Direction = FMath::Sign(FlickAccumulated);
+		FlickAccumulated = 0.0f;
+		FlickWindowStart = -1.0;
+		if (SwitchTarget(Direction))
+		{
+			LastSwitchTime = Now;
+		}
+	}
+}
+
+bool UODLockOnComponent::SwitchTarget(float Direction)
+{
+	const AActor* OwnerActor = GetOwner();
+	const AActor* Current = Target.Get();
+	if (!IsValid(OwnerActor) || !IsValid(Current) || FMath::IsNearlyZero(Direction))
+	{
+		return false;
+	}
+
+	// 플레이어에서 현재 대상을 보는 방향을 기준으로, 원하는 쪽(좌/우)에서 가장 가까운 각도의 적을 고른다.
+	const FVector Origin = OwnerActor->GetActorLocation();
+	const FVector BaseDirection = (Current->GetActorLocation() - Origin).GetSafeNormal2D();
+	if (BaseDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	TArray<AActor*> Candidates;
+	GatherCandidates(Candidates);
+
+	AActor* Best = nullptr;
+	float BestScore = TNumericLimits<float>::Max();
+	for (AActor* Candidate : Candidates)
+	{
+		if (Candidate == Current)
+		{
+			continue;
+		}
+		const FVector ToCandidate = (Candidate->GetActorLocation() - Origin).GetSafeNormal2D();
+		// 양수 = 기준 방향의 오른쪽
+		const float SignedAngle = FMath::RadiansToDegrees(FMath::Atan2(FVector::CrossProduct(BaseDirection, ToCandidate).Z, FVector::DotProduct(BaseDirection, ToCandidate)));
+		if (SignedAngle * Direction <= 0.0f || FMath::Abs(SignedAngle) > MaxSwitchAngle)
+		{
+			continue;
+		}
+		const float Score = FMath::Abs(SignedAngle) + FVector::Dist2D(Origin, Candidate->GetActorLocation()) * 0.005f;
+		if (Score < BestScore)
+		{
+			BestScore = Score;
+			Best = Candidate;
+		}
+	}
+
+	if (!IsValid(Best))
+	{
+		UE_LOG(LogODCombat, Verbose, TEXT("%s 락온 전환: %s 쪽에 대상 없음"), *GetNameSafe(GetOwner()), Direction > 0.0f ? TEXT("오른") : TEXT("왼"));
+		return false;
+	}
+
+	SetTarget(Best);
+	return true;
+}
+
 AActor* UODLockOnComponent::FindBestTarget() const
 {
 	const APawn* OwnerPawn = Cast<APawn>(GetOwner());

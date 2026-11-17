@@ -22,6 +22,7 @@
 #include "Input/ODInputConfig.h"
 #include "Character/ODCombatModeComponent.h"
 #include "Character/ODLockOnComponent.h"
+#include "Character/ODPotionComponent.h"
 #include "Interaction/ODInteractionComponent.h"
 #include "World/ODBossEntrance.h"
 #include "Core/ODGameMode.h"
@@ -55,6 +56,7 @@ AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	CombatModeComponent = CreateDefaultSubobject<UODCombatModeComponent>(TEXT("CombatMode"));
 	InteractionComponent = CreateDefaultSubobject<UODInteractionComponent>(TEXT("Interaction"));
 	LockOnComponent = CreateDefaultSubobject<UODLockOnComponent>(TEXT("LockOn"));
+	PotionComponent = CreateDefaultSubobject<UODPotionComponent>(TEXT("Potion"));
 
 	// 플레이어 진영
 	TeamId = 0;
@@ -197,13 +199,15 @@ void AODPlayerCharacter::Input_Look(const FInputActionValue& Value)
 		return;
 	}
 
-	// 락온 중에는 카메라가 대상을 따라가므로 마우스 시점 입력을 받지 않는다.
+	const FVector2D Axis = Value.Get<FVector2D>();
+
+	// 락온 중에는 카메라가 대상을 따라가므로 시점을 돌리지 않고, 크게 휘두르면 대상을 바꾼다.
 	if (IsValid(LockOnComponent) && LockOnComponent->IsLockedOn())
 	{
+		LockOnComponent->HandleLookInput(Axis);
 		return;
 	}
 
-	const FVector2D Axis = Value.Get<FVector2D>();
 	AddControllerYawInput(Axis.X);
 	AddControllerPitchInput(Axis.Y);
 }
@@ -237,6 +241,17 @@ void AODPlayerCharacter::Input_LockOn()
 	if (IsValid(LockOnComponent) && !IsDead())
 	{
 		LockOnComponent->ToggleLockOn();
+	}
+}
+
+void AODPlayerCharacter::Revive()
+{
+	Super::Revive();
+
+	// 휴식·사망(부활)·테스트 초기화 모두 이 경로를 지나므로 여기서 물약을 채운다.
+	if (IsValid(PotionComponent))
+	{
+		PotionComponent->Refill();
 	}
 }
 

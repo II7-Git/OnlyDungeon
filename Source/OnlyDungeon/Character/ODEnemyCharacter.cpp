@@ -11,6 +11,13 @@
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "AI/ODAIController.h"
+#include "Character/ODEnemyCombatComponent.h"
+#include "GameplayEffect.h"
+#include "AbilitySystemBlueprintLibrary.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
+#include "Camera/CameraShakeBase.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODFieldSubsystem.h"
 #include "Core/ODLogChannels.h"
@@ -36,8 +43,13 @@ AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer
 	NameplateComponent->SetCanEverAffectNavigation(false);
 	NameplateComponent->SetHiddenInGame(true);
 
+	CombatComponent = CreateDefaultSubobject<UODEnemyCombatComponent>(TEXT("EnemyCombat"));
+
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 360.0f, 0.0f);
+	// 길찾기 이동도 가속도로 움직인다. 끄면 이동 중에도 가속도가 0이라 애님 BP(속도 > 0 그리고 가속도 ≠ 0일 때 걷기)가
+	// 대기 자세로 남아 발이 땅에 붙은 채 미끄러진다.
+	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
 }
 
 void AODEnemyCharacter::BeginPlay()
@@ -133,6 +145,15 @@ void AODEnemyCharacter::SetCombatActive(bool bNewActive)
 	UE_LOG(LogODAI, Log, TEXT("%s 전투 %s"), *GetNameSafe(this), bNewActive ? TEXT("활성") : TEXT("대기"));
 	HandleCombatActiveChanged(bNewActive);
 	OnCombatActiveChanged.Broadcast(this, bNewActive);
+
+	// 등장 연출 (보스 포효 등)
+	if (bNewActive && !IsDead() && CombatStartEvent.IsValid())
+	{
+		FGameplayEventData Payload;
+		Payload.EventTag = CombatStartEvent;
+		Payload.Instigator = this;
+		UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, CombatStartEvent, Payload);
+	}
 }
 
 void AODEnemyCharacter::HandleCombatActiveChanged(bool bNewActive)
@@ -148,6 +169,29 @@ void AODEnemyCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 {
 	Super::HandleOutOfHealth(DamageInstigator);
 	CombatTarget.Reset();
+	ClearPhaseLoopEffect();
+
+	// 쓰러짐 연출
+	if (IsValid(DeathEffect))
+	{
+		UNiagaraComponent* Effect = UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, DeathEffect, GetActorLocation(), GetActorRotation(), FVector(DeathEffectScale));
+		if (IsValid(Effect) && DeathEffectDuration > 0.0f)
+		{
+			FTimerHandle StopHandle;
+			GetWorldTimerManager().SetTimer(StopHandle, FTimerDelegate::CreateWeakLambda(Effect, [Effect]()
+			{
+				Effect->Deactivate();
+			}), DeathEffectDuration, false);
+		}
+	}
+	if (DeathCameraShake)
+	{
+		UGameplayStatics::PlayWorldCameraShake(this, DeathCameraShake, GetActorLocation(), 0.0f, 4000.0f, 1.0f, false);
+	}
+	if (IsValid(CombatComponent))
+	{
+		CombatComponent->ResetCombatState();
+	}
 	RefreshAI(false);
 	RefreshNameplate();
 }
@@ -170,7 +214,9 @@ void AODEnemyCharacter::RefreshNameplate()
 		const bool bFightingPlayer = IsValid(PlayerPawn) && GetCombatTarget() == PlayerPawn;
 		const bool bDamaged = IsValid(ASC)
 			&& ASC->GetNumericAttribute(UODAttributeSet_Health::GetHealthAttribute()) < ASC->GetNumericAttribute(UODAttributeSet_Health::GetMaxHealthAttribute());
-		bVisible = bNear || bFightingPlayer || bDamaged;
+		// 매복 중(아직 싸우지 않음)에는 가까이 와도 숨긴다. 이름표가 매복을 들키게 하면 안 된다.
+		const bool bHiddenAmbush = IdleBehavior == EODEnemyIdleBehavior::Ambush && !bFightingPlayer && !bDamaged;
+		bVisible = !bHiddenAmbush && (bNear || bFightingPlayer || bDamaged);
 	}
 
 	if (NameplateComponent->bHiddenInGame == bVisible)
@@ -212,11 +258,15 @@ AActor* AODEnemyCharacter::UpdateCombatTarget()
 		bReturningHome = false;
 	}
 
-	// 너무 멀리 끌려왔으면 대상을 놓고 돌아간다.
-	if (DistanceFromSpawn > LeashRange)
+	// 구역 이탈: 자신이 너무 멀리 끌려왔거나, 싸우던 플레이어가 구역 밖으로 나갔으면 어그로를 풀고 돌아간다.
+	const AActor* CurrentTarget = GetCombatTarget();
+	const bool bTargetLeftArea = IsValid(CurrentTarget) && FVector::Dist2D(CurrentTarget->GetActorLocation(), GetSpawnLocation()) > LeashRange;
+	if (DistanceFromSpawn > LeashRange || bTargetLeftArea)
 	{
-		CombatTarget.Reset();
-		bReturningHome = true;
+		if (!bReturningHome)
+		{
+			Disengage();
+		}
 		return nullptr;
 	}
 
@@ -233,11 +283,57 @@ AActor* AODEnemyCharacter::UpdateCombatTarget()
 	// 싱글플레이: 대상 후보는 플레이어 하나
 	AODCharacterBase* PlayerCharacter = Cast<AODCharacterBase>(UGameplayStatics::GetPlayerPawn(this, 0));
 	if (IsValid(PlayerCharacter) && !PlayerCharacter->IsDead() && IsHostileTo(PlayerCharacter)
-		&& FVector::Dist2D(GetActorLocation(), PlayerCharacter->GetActorLocation()) <= AggroRange)
+		&& FVector::Dist2D(GetActorLocation(), PlayerCharacter->GetActorLocation()) <= AggroRange
+		&& FVector::Dist2D(PlayerCharacter->GetActorLocation(), GetSpawnLocation()) <= LeashRange)
 	{
 		CombatTarget = PlayerCharacter;
+		// 무리 어그로: 주변 동료도 함께 달려온다.
+		if (AllyAlertRadius > 0.0f)
+		{
+			if (UODFieldSubsystem* Field = GetWorld() ? GetWorld()->GetSubsystem<UODFieldSubsystem>() : nullptr)
+			{
+				Field->AlertNearbyEnemies(this, PlayerCharacter, AllyAlertRadius);
+			}
+		}
 	}
 	return GetCombatTarget();
+}
+
+bool AODEnemyCharacter::ReceiveAlert(AODCharacterBase* Target)
+{
+	if (!bCombatActive || IsDead() || bReturningHome || IsValid(GetCombatTarget()) || !IsValid(Target) || Target->IsDead() || !IsHostileTo(Target))
+	{
+		return false;
+	}
+	// 대상이 이미 구역 밖이면 따라가지 않는다.
+	if (FVector::Dist2D(Target->GetActorLocation(), GetSpawnLocation()) > LeashRange)
+	{
+		return false;
+	}
+	CombatTarget = Target;
+	return true;
+}
+
+void AODEnemyCharacter::Disengage()
+{
+	CombatTarget.Reset();
+	bReturningHome = true;
+	if (IsValid(CombatComponent))
+	{
+		CombatComponent->ResetCombatState();
+	}
+
+	// 소울라이크 규칙: 어그로가 풀리면 체력을 가득 회복한다. (Attribute는 GE로만 변경)
+	if (UODAbilitySystemComponent* ASC = GetODAbilitySystemComponent(); IsValid(ASC) && LeashResetEffect)
+	{
+		ASC->ApplyGameplayEffectToSelf(LeashResetEffect.GetDefaultObject(), 1.0f, ASC->MakeEffectContext());
+	}
+	UE_LOG(LogODAI, Log, TEXT("%s 구역 이탈 → 어그로 해제, 귀환"), *GetNameSafe(this));
+}
+
+FVector AODEnemyCharacter::GetPatrolPoint(int32 Index) const
+{
+	return PatrolPoints.IsValidIndex(Index) ? SpawnTransform.TransformPosition(PatrolPoints[Index]) : GetSpawnLocation();
 }
 
 void AODEnemyCharacter::RefreshPhase()
@@ -275,12 +371,47 @@ void AODEnemyCharacter::RefreshPhase()
 			}
 		}
 	}
+
+	// 전투 중 더 깊은 페이즈로 넘어갔을 때만 연출 (초기화·부활로 1페이즈로 돌아갈 때는 조용히)
+	if (PhaseIndex != CurrentPhaseIndex)
+	{
+		const bool bAdvanced = PhaseIndex > CurrentPhaseIndex && bCombatActive && !IsDead();
+		CurrentPhaseIndex = PhaseIndex;
+		ClearPhaseLoopEffect();
+		const FODEnemyPhase& Phase = Phases[PhaseIndex];
+		if (bAdvanced && Phase.EnterEvent.IsValid())
+		{
+			FGameplayEventData Payload;
+			Payload.EventTag = Phase.EnterEvent;
+			Payload.Instigator = this;
+			UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, Phase.EnterEvent, Payload);
+		}
+		if (IsValid(Phase.LoopEffect) && IsValid(GetMesh()) && !IsDead())
+		{
+			PhaseLoopComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(Phase.LoopEffect, GetMesh(), Phase.LoopEffectSocket, FVector::ZeroVector, FRotator::ZeroRotator,
+				EAttachLocation::SnapToTarget, false, true, ENCPoolMethod::None);
+		}
+	}
+}
+
+void AODEnemyCharacter::ClearPhaseLoopEffect()
+{
+	if (IsValid(PhaseLoopComponent))
+	{
+		PhaseLoopComponent->DestroyComponent();
+	}
+	PhaseLoopComponent = nullptr;
 }
 
 void AODEnemyCharacter::Revive()
 {
 	Super::Revive();
 	CombatTarget.Reset();
+	ClearPhaseLoopEffect();
+	if (IsValid(CombatComponent))
+	{
+		CombatComponent->ResetCombatState();
+	}
 	bReturningHome = false;
 	SetCombatActive(!bStartDormant);
 	RefreshPhase();

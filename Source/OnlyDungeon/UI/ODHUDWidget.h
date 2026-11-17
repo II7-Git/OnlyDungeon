@@ -13,6 +13,7 @@ class UCanvasPanel;
 class UODCombatModeComponent;
 class UODInteractionComponent;
 class UODLockOnComponent;
+class UODPotionComponent;
 class AODEnemyCharacter;
 class AODCharacterBase;
 class UGameplayAbility;
@@ -35,7 +36,7 @@ struct FODHUDBarState
 /**
  * 플레이어 HUD. 다크소울 배치를 따른다.
  * - 왼쪽 위: 체력(빨강)·스태미나(초록) 바. 길이는 최대치에 비례하고, 체력은 깎인 부분이 잠시 남았다가 줄어든다.
- * - 왼쪽 아래: 장비 십자 슬롯 (오른손 = 현재 무기)
+ * - 왼쪽 아래: 장비 십자 슬롯 (오른손 = 현재 무기, 아래 = 회복 물약과 남은 개수)
  * - 아래 가운데: 보스 체력 바 (보스전 중에만 보스 이름·체력. 보스전 서브시스템의 시작·종료 알림)
  *   일반 몬스터의 체력은 머리 위 이름표(UODEnemyNameplateWidget)로 보여 준다.
  * - 락온 대상 위: 락온 표식 (락온 중에만 타이머로 화면 위치 갱신)
@@ -88,6 +89,14 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> RightHandText;
 
+	/** 아래 슬롯: 회복 물약 이름 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> ItemNameText;
+
+	/** 아래 슬롯: 회복 물약 남은 개수 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> ItemCountText;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> TargetPanel;
 
@@ -105,6 +114,14 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> InteractionText;
+
+	/** 보스 등장 시 크게 띄우는 보스 이름 (가운데 위) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> BossTitleText;
+
+	/** 보스를 쓰러뜨렸을 때 띄우는 문구 (가운데) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> VictoryText;
 
 	/** 사망 문구 (가운데) */
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -200,6 +217,9 @@ private:
 	void HandleLockOnTargetChanged(AActor* NewTarget);
 
 	UFUNCTION()
+	void HandlePotionChargesChanged(int32 CurrentCharges, int32 MaxCharges);
+
+	UFUNCTION()
 	void HandleBossEncounterStarted(AODEnemyCharacter* Boss);
 
 	UFUNCTION()
@@ -207,6 +227,12 @@ private:
 
 	UFUNCTION()
 	void HandleObservedPawnDeath(AODCharacterBase* DeadCharacter);
+
+	/** 큰 문구를 서서히 나타냈다가 사라지게 한다. (실제 시간 기준이라 느린 화면에도 같은 속도) */
+	void ShowBanner(UTextBlock* Banner, double& OutStartTime, float Delay);
+	void UpdateBanners();
+	/** 한 문구의 현재 불투명도. 끝났으면 음수 */
+	float GetBannerOpacity(double StartTime, double Now) const;
 
 	/** 사망 문구를 관찰 중인 폰의 사망 여부에 맞춘다. */
 	void RefreshDeathText();
@@ -224,6 +250,7 @@ private:
 	TWeakObjectPtr<UODCombatModeComponent> ObservedModeComponent;
 	TWeakObjectPtr<UODInteractionComponent> ObservedInteraction;
 	TWeakObjectPtr<UODLockOnComponent> ObservedLockOn;
+	TWeakObjectPtr<UODPotionComponent> ObservedPotion;
 	TWeakObjectPtr<UAbilitySystemComponent> ObservedASC;
 	TArray<TPair<FGameplayAttribute, FDelegateHandle>> PlayerAttributeHandles;
 	FDelegateHandle FailureHandle;
@@ -244,6 +271,11 @@ private:
 	FTimerHandle TargetHideTimer;
 	FTimerHandle FailureHideTimer;
 	FTimerHandle LockOnMarkerTimer;
+	FTimerHandle BannerTimer;
+
+	/** 문구 시작 시각 (실제 시간, 음수면 표시 안 함) */
+	double BossTitleStart = -1.0;
+	double VictoryStart = -1.0;
 
 	TWeakObjectPtr<const UObject> LastWeaponData;
 };
