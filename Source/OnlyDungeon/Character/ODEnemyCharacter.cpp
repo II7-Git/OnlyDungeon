@@ -42,6 +42,9 @@ AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer
 
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 360.0f, 0.0f);
+	// 길찾기 이동도 가속도로 움직인다. 끄면 이동 중에도 가속도가 0이라 애님 BP(속도 > 0 그리고 가속도 ≠ 0일 때 걷기)가
+	// 대기 자세로 남아 발이 땅에 붙은 채 미끄러진다.
+	GetCharacterMovement()->GetNavMovementProperties()->bUseAccelerationForPaths = true;
 }
 
 void AODEnemyCharacter::BeginPlay()
