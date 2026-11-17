@@ -13,6 +13,7 @@
 #include "Character/ODEnemyCharacter.h"
 #include "Character/ODEnemyCombatComponent.h"
 #include "Core/ODGameplayTags.h"
+#include "Core/ODFieldSubsystem.h"
 #include "Core/ODLogChannels.h"
 
 namespace ODStateTreeNodes
@@ -364,6 +365,17 @@ EStateTreeRunStatus FODStateTreeExecutePatternTask::EnterState(FStateTreeExecuti
 		return EStateTreeRunStatus::Failed;
 	}
 
+	// 공격 순번은 다가가기 시작할 때 미리 잡는다. (도착해서 잡으면 접근 중인 몬스터가 모두 순번이 남았다고 보고 한꺼번에 달려든다)
+	if (Combat->GetPatternSet()->bUseAttackToken)
+	{
+		UODFieldSubsystem* Field = Enemy->GetWorld() ? Enemy->GetWorld()->GetSubsystem<UODFieldSubsystem>() : nullptr;
+		if (Field && !Field->AcquireAttackToken(Enemy))
+		{
+			Data.PatternIndex = INDEX_NONE;
+			return EStateTreeRunStatus::Failed;
+		}
+	}
+
 	if (Distance <= Pattern->MaxRange)
 	{
 		return ODStateTreeNodes::ActivatePattern(Data, Enemy) ? EStateTreeRunStatus::Running : EStateTreeRunStatus::Failed;
@@ -445,6 +457,15 @@ void FODStateTreeExecutePatternTask::ExitState(FStateTreeExecutionContext& Conte
 	if (UODEnemyCombatComponent* Combat = ODStateTreeNodes::GetCombat(Enemy); Combat && Data.PatternIndex != INDEX_NONE)
 	{
 		Combat->NotifyPatternFinished(Data.bStarted ? Data.PatternIndex : INDEX_NONE);
+
+		// 다가가다 포기했으면 미리 잡아 둔 순번을 돌려준다. (발동했으면 컴포넌트가 돌려준다)
+		if (!Data.bStarted && IsValid(Enemy) && IsValid(Combat->GetPatternSet()) && Combat->GetPatternSet()->bUseAttackToken)
+		{
+			if (UODFieldSubsystem* Field = Enemy->GetWorld() ? Enemy->GetWorld()->GetSubsystem<UODFieldSubsystem>() : nullptr)
+			{
+				Field->ReleaseAttackToken(Enemy);
+			}
+		}
 	}
 	Data.PatternIndex = INDEX_NONE;
 	Data.bStarted = false;

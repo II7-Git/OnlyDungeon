@@ -199,6 +199,16 @@ bool UODEnemyCombatComponent::ShouldPunish(const AActor* Target, float Distance,
 	}
 	bWasInOpening = bInOpening;
 
+	// 공격 순번을 쓰는 몬스터는 빈틈 공략도 순번을 얻을 수 있을 때만 한다. (여럿이 한꺼번에 파고드는 것 방지)
+	if (PatternSet->bUseAttackToken && !bHoldingToken)
+	{
+		const UODFieldSubsystem* Field = GetWorld() ? GetWorld()->GetSubsystem<UODFieldSubsystem>() : nullptr;
+		if (Field && !Field->CanAcquireAttackToken(GetEnemy()))
+		{
+			return false;
+		}
+	}
+
 	return bInOpening && bPunishThisOpening && SelectPattern(Distance, true, ApproachSlack) != INDEX_NONE;
 }
 

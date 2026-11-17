@@ -178,7 +178,9 @@ void AODEnemyCharacter::RefreshNameplate()
 		const bool bFightingPlayer = IsValid(PlayerPawn) && GetCombatTarget() == PlayerPawn;
 		const bool bDamaged = IsValid(ASC)
 			&& ASC->GetNumericAttribute(UODAttributeSet_Health::GetHealthAttribute()) < ASC->GetNumericAttribute(UODAttributeSet_Health::GetMaxHealthAttribute());
-		bVisible = bNear || bFightingPlayer || bDamaged;
+		// 매복 중(아직 싸우지 않음)에는 가까이 와도 숨긴다. 이름표가 매복을 들키게 하면 안 된다.
+		const bool bHiddenAmbush = IdleBehavior == EODEnemyIdleBehavior::Ambush && !bFightingPlayer && !bDamaged;
+		bVisible = !bHiddenAmbush && (bNear || bFightingPlayer || bDamaged);
 	}
 
 	if (NameplateComponent->bHiddenInGame == bVisible)
