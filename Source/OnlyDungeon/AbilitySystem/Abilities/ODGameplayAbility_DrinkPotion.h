@@ -9,6 +9,8 @@
 class UAnimMontage;
 class UGameplayEffect;
 class UODPotionComponent;
+class UStaticMesh;
+class UStaticMeshComponent;
 struct FOnAttributeChangeData;
 
 /**
@@ -18,6 +20,7 @@ struct FOnAttributeChangeData;
  *   회복은 즉시 적용 GE(HealEffectClass, SetByCaller Data.Heal)를 틱마다 적용한다. (Attribute 변경은 GE로만)
  * - 마시는 도중 피해를 입거나(체력 감소) 경직 등으로 몽타주가 끊기면 즉시 끝나고 회복도 멈춘다. 소모한 물약은 돌아오지 않는다.
  * - 마시는 동안 천천히만 걸을 수 있고(MoveSpeedMultiplier), 공격·회피·방어(Ability.Action)는 막힌다.
+ * - 마시는 동안 무기를 숨기고, 물약 병 메시(PotionMesh)를 손 소켓에 붙였다가 끝나면 없앤다.
  */
 UCLASS(Abstract)
 class ONLYDUNGEON_API UODGameplayAbility_DrinkPotion : public UODGameplayAbility
@@ -59,6 +62,21 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Potion", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float MoveSpeedMultiplier = 0.3f;
 
+	/**
+	 * 마시는 동안 손에 드는 물약 병. 비우면 빈손으로 마신다.
+	 * 플레이어가 항상 가진 고정 아이템이라 어빌리티와 함께 로드되도록 하드 참조로 둔다.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Potion|Bottle")
+	TObjectPtr<UStaticMesh> PotionMesh;
+
+	/** 병을 붙일 캐릭터 메시 소켓(본) 이름. 마시기 모션이 쓰는 손에 맞춘다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Potion|Bottle")
+	FName PotionAttachSocket = TEXT("hand_l");
+
+	/** 소켓 기준 병의 위치·회전·크기 (병을 손바닥에 쥔 모양으로 맞추는 값) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Potion|Bottle")
+	FTransform PotionAttachOffset;
+
 private:
 	UODPotionComponent* GetPotionComponent() const;
 
@@ -86,4 +104,7 @@ private:
 
 	/** 마시는 동안 숨긴 무기 (끝날 때 다시 보이게). 무기 종류와 관계없이 같은 모션을 쓰기 위해 숨긴다. */
 	TWeakObjectPtr<AActor> HiddenWeapon;
+
+	/** 마시는 동안만 손에 붙여 두는 병 메시 컴포넌트 (끝날 때 제거) */
+	TWeakObjectPtr<UStaticMeshComponent> PotionMeshComponent;
 };

@@ -5,6 +5,9 @@
 #include "AbilitySystemComponent.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Animation/AnimMontage.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameplayEffect.h"
 #include "TimerManager.h"
@@ -94,6 +97,19 @@ void UODGameplayAbility_DrinkPotion::ActivateAbility(const FGameplayAbilitySpecH
 				HiddenWeapon = Weapon;
 			}
 		}
+	}
+
+	// 손에 물약 병을 쥐여 준다. (마시는 동안만 존재하는 컴포넌트)
+	if (AODCharacterBase* Character = GetODCharacterFromActorInfo(); IsValid(Character) && IsValid(PotionMesh) && IsValid(Character->GetMesh()))
+	{
+		UStaticMeshComponent* Bottle = NewObject<UStaticMeshComponent>(Character, NAME_None, RF_Transient);
+		Bottle->SetStaticMesh(PotionMesh);
+		Bottle->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Bottle->SetGenerateOverlapEvents(false);
+		Bottle->SetupAttachment(Character->GetMesh(), PotionAttachSocket);
+		Bottle->SetRelativeTransform(PotionAttachOffset);
+		Bottle->RegisterComponent();
+		PotionMeshComponent = Bottle;
 	}
 
 	if (IsValid(DrinkMontage))
@@ -211,6 +227,12 @@ void UODGameplayAbility_DrinkPotion::EndAbility(const FGameplayAbilitySpecHandle
 		Weapon->SetActorHiddenInGame(false);
 	}
 	HiddenWeapon.Reset();
+
+	if (UStaticMeshComponent* Bottle = PotionMeshComponent.Get())
+	{
+		Bottle->DestroyComponent();
+	}
+	PotionMeshComponent.Reset();
 
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
