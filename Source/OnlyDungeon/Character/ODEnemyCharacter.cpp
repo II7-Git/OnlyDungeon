@@ -13,6 +13,11 @@
 #include "AI/ODAIController.h"
 #include "Character/ODEnemyCombatComponent.h"
 #include "GameplayEffect.h"
+#include "AbilitySystemBlueprintLibrary.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
+#include "Camera/CameraShakeBase.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODFieldSubsystem.h"
 #include "Core/ODLogChannels.h"
@@ -140,6 +145,15 @@ void AODEnemyCharacter::SetCombatActive(bool bNewActive)
 	UE_LOG(LogODAI, Log, TEXT("%s 전투 %s"), *GetNameSafe(this), bNewActive ? TEXT("활성") : TEXT("대기"));
 	HandleCombatActiveChanged(bNewActive);
 	OnCombatActiveChanged.Broadcast(this, bNewActive);
+
+	// 등장 연출 (보스 포효 등)
+	if (bNewActive && !IsDead() && CombatStartEvent.IsValid())
+	{
+		FGameplayEventData Payload;
+		Payload.EventTag = CombatStartEvent;
+		Payload.Instigator = this;
+		UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, CombatStartEvent, Payload);
+	}
 }
 
 void AODEnemyCharacter::HandleCombatActiveChanged(bool bNewActive)
@@ -155,6 +169,17 @@ void AODEnemyCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 {
 	Super::HandleOutOfHealth(DamageInstigator);
 	CombatTarget.Reset();
+	ClearPhaseLoopEffect();
+
+	// 쓰러짐 연출
+	if (IsValid(DeathEffect))
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, DeathEffect, GetActorLocation(), GetActorRotation(), FVector(DeathEffectScale));
+	}
+	if (DeathCameraShake)
+	{
+		UGameplayStatics::PlayWorldCameraShake(this, DeathCameraShake, GetActorLocation(), 0.0f, 4000.0f, 1.0f, false);
+	}
 	if (IsValid(CombatComponent))
 	{
 		CombatComponent->ResetCombatState();
@@ -338,12 +363,43 @@ void AODEnemyCharacter::RefreshPhase()
 			}
 		}
 	}
+
+	// 전투 중 더 깊은 페이즈로 넘어갔을 때만 연출 (초기화·부활로 1페이즈로 돌아갈 때는 조용히)
+	if (PhaseIndex != CurrentPhaseIndex)
+	{
+		const bool bAdvanced = PhaseIndex > CurrentPhaseIndex && bCombatActive && !IsDead();
+		CurrentPhaseIndex = PhaseIndex;
+		ClearPhaseLoopEffect();
+		const FODEnemyPhase& Phase = Phases[PhaseIndex];
+		if (bAdvanced && Phase.EnterEvent.IsValid())
+		{
+			FGameplayEventData Payload;
+			Payload.EventTag = Phase.EnterEvent;
+			Payload.Instigator = this;
+			UAbilitySystemBlueprintLibrary::SendGameplayEventToActor(this, Phase.EnterEvent, Payload);
+		}
+		if (IsValid(Phase.LoopEffect) && IsValid(GetMesh()) && !IsDead())
+		{
+			PhaseLoopComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(Phase.LoopEffect, GetMesh(), Phase.LoopEffectSocket, FVector::ZeroVector, FRotator::ZeroRotator,
+				EAttachLocation::SnapToTarget, false, true, ENCPoolMethod::None);
+		}
+	}
+}
+
+void AODEnemyCharacter::ClearPhaseLoopEffect()
+{
+	if (IsValid(PhaseLoopComponent))
+	{
+		PhaseLoopComponent->DestroyComponent();
+	}
+	PhaseLoopComponent = nullptr;
 }
 
 void AODEnemyCharacter::Revive()
 {
 	Super::Revive();
 	CombatTarget.Reset();
+	ClearPhaseLoopEffect();
 	if (IsValid(CombatComponent))
 	{
 		CombatComponent->ResetCombatState();

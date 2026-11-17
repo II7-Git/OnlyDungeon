@@ -62,6 +62,8 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Skill_1, "Cooldown.Skill.1", "스킬 1 쿨다운");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Skill_2, "Cooldown.Skill.2", "스킬 2 쿨다운");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Boss_Intro, "Event.Boss.Intro", "보스가 전투를 시작함 (등장 포효)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Boss_PhaseChange, "Event.Boss.PhaseChange", "보스가 다음 페이즈로 넘어감 (전환 포효)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Hit, "GameplayCue.Hit", "근접 공격 피격 이펙트 (피해 GE 실행 시, 맞은 캐릭터의 HitImpactEffect)");
 
 	// ---------- 무기 종류 ----------

@@ -28,7 +28,7 @@ public class OnlyDungeon : ModuleRules
 		});
 
 		// 피격 이펙트(GameplayCue)에서 나이아가라 시스템을 생성한다.
-		PrivateDependencyModuleNames.AddRange(new string[] { "Niagara" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "Niagara", "EngineCameras" });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"OnlyDungeon",

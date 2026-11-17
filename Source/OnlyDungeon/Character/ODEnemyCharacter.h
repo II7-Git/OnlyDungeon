@@ -9,6 +9,9 @@
 
 class AODEnemyCharacter;
 class UAnimMontage;
+class UCameraShakeBase;
+class UNiagaraComponent;
+class UNiagaraSystem;
 class UGameplayEffect;
 class UODEnemyCombatComponent;
 class UStateTree;
@@ -27,6 +30,18 @@ struct FODEnemyPhase
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy", meta = (Categories = "State.Phase"))
 	FGameplayTag PhaseTag;
+
+	/** 전투 중 이 페이즈로 넘어갈 때 자신에게 보내는 게임플레이 이벤트 (예: Event.Boss.PhaseChange → 전환 포효) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy", meta = (Categories = "Event"))
+	FGameplayTag EnterEvent;
+
+	/** 이 페이즈 동안 몸에 붙어 계속 재생할 이펙트 (예: 2페이즈 분노 불꽃). 페이즈가 끝나거나 죽거나 초기화되면 사라진다. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy")
+	TObjectPtr<UNiagaraSystem> LoopEffect;
+
+	/** 지속 이펙트를 붙일 소켓(본). 비우면 몸 중심 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy")
+	FName LoopEffectSocket;
 };
 
 /** 플레이어를 발견하기 전 행동 (배치마다 지정) */
@@ -175,6 +190,21 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Idle")
 	TObjectPtr<UAnimMontage> AmbushGetUpMontage;
 
+	/** 전투가 시작될 때(대기 → 활성) 자신에게 보내는 게임플레이 이벤트 (예: Event.Boss.Intro → 등장 포효). 비우면 보내지 않는다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Presentation", meta = (Categories = "Event"))
+	FGameplayTag CombatStartEvent;
+
+	/** 쓰러질 때 터뜨리는 이펙트 (몸 중심) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Presentation")
+	TObjectPtr<UNiagaraSystem> DeathEffect;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Presentation", meta = (ClampMin = "0.01"))
+	float DeathEffectScale = 1.0f;
+
+	/** 쓰러질 때 주변 플레이어 화면 흔들림 (큰 적) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Presentation")
+	TSubclassOf<UCameraShakeBase> DeathCameraShake;
+
 	/** 보스 페이즈 (비우면 페이즈 없음). 체력 비율이 높은 순서로 둔다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Phase")
 	TArray<FODEnemyPhase> Phases;
@@ -217,6 +247,16 @@ private:
 	FTimerHandle NameplateTimer;
 
 	TWeakObjectPtr<AODCharacterBase> CombatTarget;
+
+	/** 지금 페이즈 (Phases 인덱스). 높아질 때만 진입 이벤트·지속 이펙트를 낸다. */
+	int32 CurrentPhaseIndex = 0;
+
+	/** 지금 페이즈의 지속 이펙트 */
+	UPROPERTY()
+	TObjectPtr<UNiagaraComponent> PhaseLoopComponent;
+
+	/** 페이즈 지속 이펙트를 없앤다. */
+	void ClearPhaseLoopEffect();
 
 	/** 대상을 놓고 시작 위치로 돌아가는 중 (도착할 때까지 새 대상을 잡지 않는다) */
 	bool bReturningHome = false;

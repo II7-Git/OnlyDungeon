@@ -57,7 +57,12 @@ private:
 	UFUNCTION()
 	void HandleBossDeath(AODCharacterBase* DeadCharacter);
 
+	/** 승리 순간 잠깐 느린 화면을 걸었다가 되돌린다. (게임 시간 배율) */
+	void PlayVictorySlowMotion();
+	void RestoreTimeDilation();
+
 	TArray<TWeakObjectPtr<AODEnemyCharacter>> Bosses;
 	TWeakObjectPtr<AODBossEntrance> Entrance;
 	bool bActive = false;
+	FTimerHandle SlowMotionTimer;
 };

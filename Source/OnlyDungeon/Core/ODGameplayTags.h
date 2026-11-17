@@ -70,6 +70,10 @@ namespace ODGameplayTags
 	// GameplayCue
 	ONLYDUNGEON_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(GameplayCue_Hit);
 
+	// 보스 연출 이벤트
+	ONLYDUNGEON_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Boss_Intro);
+	ONLYDUNGEON_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Boss_PhaseChange);
+
 	// ---------- 무기 종류 ----------
 	ONLYDUNGEON_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Weapon_Type_OneHandSword);
 	ONLYDUNGEON_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Weapon_Type_TwoHandSword);

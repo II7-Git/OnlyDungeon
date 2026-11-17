@@ -115,6 +115,14 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> InteractionText;
 
+	/** 보스 등장 시 크게 띄우는 보스 이름 (가운데 위) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> BossTitleText;
+
+	/** 보스를 쓰러뜨렸을 때 띄우는 문구 (가운데) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> VictoryText;
+
 	/** 사망 문구 (가운데) */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> DeathText;
@@ -220,6 +228,12 @@ private:
 	UFUNCTION()
 	void HandleObservedPawnDeath(AODCharacterBase* DeadCharacter);
 
+	/** 큰 문구를 서서히 나타냈다가 사라지게 한다. (실제 시간 기준이라 느린 화면에도 같은 속도) */
+	void ShowBanner(UTextBlock* Banner, double& OutStartTime, float Delay);
+	void UpdateBanners();
+	/** 한 문구의 현재 불투명도. 끝났으면 음수 */
+	float GetBannerOpacity(double StartTime, double Now) const;
+
 	/** 사망 문구를 관찰 중인 폰의 사망 여부에 맞춘다. */
 	void RefreshDeathText();
 
@@ -257,6 +271,11 @@ private:
 	FTimerHandle TargetHideTimer;
 	FTimerHandle FailureHideTimer;
 	FTimerHandle LockOnMarkerTimer;
+	FTimerHandle BannerTimer;
+
+	/** 문구 시작 시각 (실제 시간, 음수면 표시 안 함) */
+	double BossTitleStart = -1.0;
+	double VictoryStart = -1.0;
 
 	TWeakObjectPtr<const UObject> LastWeaponData;
 };

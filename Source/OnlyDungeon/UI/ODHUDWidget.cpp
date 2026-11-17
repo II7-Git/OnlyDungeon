@@ -331,6 +331,30 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 		Panel->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
+	// ---- 가운데 위: 보스 이름, 가운데: 승리 문구 (평소엔 숨김) ----
+	{
+		BossTitleText = MakeText(Tree, 40, FLinearColor(0.92f, 0.86f, 0.72f), TEXT("BossTitleText"));
+		BossTitleText->SetJustification(ETextJustify::Center);
+		if (UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(BossTitleText))
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.5f, 0.3f));
+			CanvasSlot->SetAlignment(FVector2D(0.5, 0.5));
+			CanvasSlot->SetAutoSize(true);
+		}
+		BossTitleText->SetVisibility(ESlateVisibility::Collapsed);
+
+		VictoryText = MakeText(Tree, 46, FLinearColor(0.95f, 0.78f, 0.35f), TEXT("VictoryText"));
+		VictoryText->SetText(NSLOCTEXT("OnlyDungeon", "HUDVictory", "강적 격파"));
+		VictoryText->SetJustification(ETextJustify::Center);
+		if (UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(VictoryText))
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.5f, 0.32f));
+			CanvasSlot->SetAlignment(FVector2D(0.5, 0.5));
+			CanvasSlot->SetAutoSize(true);
+		}
+		VictoryText->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	// ---- 가운데: 사망 문구 ----
 	{
 		DeathText = MakeText(Tree, 48, FLinearColor(0.6f, 0.05f, 0.04f), TEXT("DeathText"));
@@ -440,6 +464,13 @@ void UODHUDWidget::HandleBossEncounterStarted(AODEnemyCharacter* Boss)
 	bBossBarPinned = false;
 	SetTarget(Boss);
 	bBossBarPinned = true;
+
+	// 보스 이름을 크게 띄운다. (입장 컷신이 끝나고 포효할 때)
+	if (IsValid(BossTitleText))
+	{
+		BossTitleText->SetText(Boss->GetDisplayName());
+		ShowBanner(BossTitleText, BossTitleStart, 0.3f);
+	}
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(TargetHideTimer);
@@ -451,12 +482,93 @@ void UODHUDWidget::HandleBossEncounterEnded(bool bVictory)
 	bBossBarPinned = false;
 	if (bVictory)
 	{
+		// 느린 화면이 끝나갈 즈음 승리 문구
+		ShowBanner(VictoryText, VictoryStart, 1.0f);
 		// 빈 체력 바를 잠시 보여 준 뒤 숨긴다.
 		StartTargetHideTimer();
 	}
 	else
 	{
 		ClearTarget();
+	}
+}
+
+namespace ODHUDBanner
+{
+	constexpr float FadeIn = 0.6f;
+	constexpr float Hold = 2.2f;
+	constexpr float FadeOut = 1.0f;
+}
+
+void UODHUDWidget::ShowBanner(UTextBlock* Banner, double& OutStartTime, float Delay)
+{
+	UWorld* World = GetWorld();
+	if (!IsValid(Banner) || !IsValid(World))
+	{
+		return;
+	}
+	OutStartTime = World->GetRealTimeSeconds() + Delay;
+	Banner->SetRenderOpacity(0.0f);
+	Banner->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (!World->GetTimerManager().IsTimerActive(BannerTimer))
+	{
+		World->GetTimerManager().SetTimer(BannerTimer, this, &ThisClass::UpdateBanners, 0.03f, true);
+	}
+}
+
+float UODHUDWidget::GetBannerOpacity(double StartTime, double Now) const
+{
+	if (StartTime < 0.0)
+	{
+		return -1.0f;
+	}
+	const float T = static_cast<float>(Now - StartTime);
+	if (T < 0.0f)
+	{
+		return 0.0f;
+	}
+	if (T < ODHUDBanner::FadeIn)
+	{
+		return T / ODHUDBanner::FadeIn;
+	}
+	if (T < ODHUDBanner::FadeIn + ODHUDBanner::Hold)
+	{
+		return 1.0f;
+	}
+	const float Out = T - ODHUDBanner::FadeIn - ODHUDBanner::Hold;
+	return Out < ODHUDBanner::FadeOut ? 1.0f - Out / ODHUDBanner::FadeOut : -1.0f;
+}
+
+void UODHUDWidget::UpdateBanners()
+{
+	UWorld* World = GetWorld();
+	if (!IsValid(World))
+	{
+		return;
+	}
+	const double Now = World->GetRealTimeSeconds();
+	bool bAnyActive = false;
+	const auto Apply = [&](UTextBlock* Banner, double& StartTime)
+	{
+		if (!IsValid(Banner) || StartTime < 0.0)
+		{
+			return;
+		}
+		const float Opacity = GetBannerOpacity(StartTime, Now);
+		if (Opacity < 0.0f)
+		{
+			Banner->SetVisibility(ESlateVisibility::Collapsed);
+			StartTime = -1.0;
+			return;
+		}
+		Banner->SetRenderOpacity(Opacity);
+		bAnyActive = true;
+	};
+	Apply(BossTitleText, BossTitleStart);
+	Apply(VictoryText, VictoryStart);
+	if (!bAnyActive)
+	{
+		World->GetTimerManager().ClearTimer(BannerTimer);
 	}
 }
 
@@ -470,6 +582,7 @@ void UODHUDWidget::NativeDestruct()
 		TimerManager.ClearTimer(TargetHideTimer);
 		TimerManager.ClearTimer(FailureHideTimer);
 		TimerManager.ClearTimer(LockOnMarkerTimer);
+		TimerManager.ClearTimer(BannerTimer);
 
 		if (UODBossEncounterSubsystem* Encounter = World->GetSubsystem<UODBossEncounterSubsystem>())
 		{
