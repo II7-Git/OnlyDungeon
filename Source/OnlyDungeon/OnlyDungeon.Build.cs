@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
 using UnrealBuildTool;
 
@@ -27,7 +27,8 @@ public class OnlyDungeon : ModuleRules
 			"MovieScene"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		// 피격 이펙트(GameplayCue)에서 나이아가라 시스템을 생성한다.
+		PrivateDependencyModuleNames.AddRange(new string[] { "Niagara" });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"OnlyDungeon",

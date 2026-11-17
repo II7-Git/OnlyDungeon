@@ -62,6 +62,8 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Skill_1, "Cooldown.Skill.1", "스킬 1 쿨다운");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Skill_2, "Cooldown.Skill.2", "스킬 2 쿨다운");
 
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Hit, "GameplayCue.Hit", "근접 공격 피격 이펙트 (피해 GE 실행 시, 맞은 캐릭터의 HitImpactEffect)");
+
 	// ---------- 무기 종류 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Type_OneHandSword, "Weapon.Type.OneHandSword", "한손검");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Type_TwoHandSword, "Weapon.Type.TwoHandSword", "양손 대검");
