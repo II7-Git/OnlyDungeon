@@ -83,6 +83,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
 	TObjectPtr<UStaticMeshComponent> Lintel;
 
+	/** 문 앞 안개벽. 입장 연출이 시작되면 사라지고, 입구가 초기화되면 다시 나타난다. (메시·재질은 BP에서 지정) */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
+	TObjectPtr<UStaticMeshComponent> FogWall;
+
 	/** 상호작용 범위 (문 앞) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
 	TObjectPtr<UBoxComponent> InteractionTrigger;
