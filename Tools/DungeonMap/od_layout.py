@@ -133,11 +133,11 @@ class Raster:
         for name, (cu, cv, r) in CLEARINGS.items():
             ph = cu * 0.37 + cv * 0.11
             self._disc(self.walk, cu, cv, lambda a: r * (1 + 0.07 * math.sin(3 * a + ph) + 0.04 * math.sin(7 * a + ph * 2)))
-            self._disc(self.mud, cu, cv, lambda a: r * (0.55 + 0.12 * math.sin(4 * a + ph)))
+            self._disc(self.mud, cu, cv, lambda a: r * (0.84 + 0.05 * math.sin(4 * a + ph)))
         for i, (u, v) in enumerate(route_samples()):
             hw = PATH_HALF_WIDTH + 1.2 * math.sin(i * 0.13) + 0.7 * math.sin(i * 0.31 + 1.0)
             self._disc(self.walk, u, v, lambda a: hw)
-            self._disc(self.mud, u, v, lambda a: 2.2 + 0.8 * math.sin(i * 0.2))
+            self._disc(self.mud, u, v, lambda a: hw * 0.74)
 
     def _distance(self, mask):
         """두 번 훑는 거리 변환 (근사)"""
@@ -192,7 +192,7 @@ def dome_distance(u, v):
 
 
 def terrain_at(r, u, v):
-    """(높이 m, 진흙, 나무 구역, 낮은 소품 구역)"""
+    """(높이 m, 진흙, 나무 구역, 낮은 소품 구역, 길가 돌 구역)"""
     d = r.sample(r.d, u, v) if (U0 < u < U1 and V0 < v < V1) else 99.0  # 격자 밖은 길에서 먼 곳
     t = r.sample(r.t, u, v)
     dm = r.sample(r.dm, u, v)
@@ -207,8 +207,9 @@ def terrain_at(r, u, v):
     rise *= 1.0 - flat
     micro = 0.10 * noise(u * 4.1, v * 3.7) * (1.0 - flat)
     h = base + rise + micro
-    mud = 1.0 - smooth(0.0, 2.4 + 0.8 * n, dm)
+    mud = 1.0 - smooth(0.0, 1.6 + 0.6 * n, dm)
     # 보이는 범위만 채운다 (길에서 멀면 쿼터뷰에 보이지 않으므로 인스턴스를 아낀다)
     tree = 1.0 if (2.5 < d < 58.0 and t >= 18.0 and dd > DOME_OUTER_RADIUS + 9.0) else 0.0
     low = 1.0 if (0.6 < d < 34.0 and dd > DOME_OUTER_RADIUS + 4.0) else 0.0
-    return h, mud, tree, low
+    edge = 1.0 if (0.4 < d < 2.8 and dd > DOME_OUTER_RADIUS + 4.0) else 0.0
+    return h, mud, tree, low, edge

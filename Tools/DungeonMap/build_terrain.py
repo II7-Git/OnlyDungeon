@@ -16,7 +16,7 @@ at = unreal.AssetToolsHelpers.get_asset_tools()
 ENV = '/Game/OnlyDungeon/Environment'
 MAP = '/Game/OnlyDungeon/Maps/L_OD_Dungeon_01'
 MAT = ENV + '/M_OD_Landscape_Forest'
-LAYERS = ['Forest', 'Mud', 'TreeZone', 'LowZone']
+LAYERS = ['Forest', 'Mud', 'TreeZone', 'LowZone', 'EdgeZone']
 
 
 def tex(p):
@@ -108,7 +108,7 @@ def run():
     for n in LAYERS:
         p = folder + '/' + n + '_LayerInfo'
         info = unreal.load_asset(p) if eal.does_asset_exist(p) else lss.create_target_layer_info(n, folder)
-        if n in ('TreeZone', 'LowZone'):
+        if n in ('TreeZone', 'LowZone', 'EdgeZone'):
             info.set_blend_method(unreal.LandscapeTargetLayerBlendMethod.NONE)
         eal.save_loaded_asset(info, False)
         if n not in names:
@@ -118,20 +118,21 @@ def run():
     out['layers'] = [str(n) for n in lss.get_target_layer_names(land)]
 
     R = L.Raster()
-    H, Fo, Mu, Tr, Lo = [], [], [], [], []
+    H, Fo, Mu, Tr, Lo, Ed = [], [], [], [], [], []
     for j in range(L.LS_SIZE):
         wy = L.LS_ORIGIN[1] + j * 100.0
         for i in range(L.LS_SIZE):
             u, v = L.to_uv(L.LS_ORIGIN[0] + i * 100.0, wy)
-            h, mud, tree, low = L.terrain_at(R, u, v)
+            h, mud, tree, low, edge = L.terrain_at(R, u, v)
             H.append(h * 100.0)
             Mu.append(mud)
             Fo.append(1.0 - mud)
             Tr.append(tree)
             Lo.append(low)
+            Ed.append(edge)
     edit = str(lss.get_edit_layer_names(land)[0])
     lss.set_heightmap_data(land, edit, H)
-    for n, w in (('Forest', Fo), ('Mud', Mu), ('TreeZone', Tr), ('LowZone', Lo)):
+    for n, w in (('Forest', Fo), ('Mud', Mu), ('TreeZone', Tr), ('LowZone', Lo), ('EdgeZone', Ed)):
         lss.set_weightmap_data(land, edit, n, w)
     out.update(verts=len(H), h=(round(min(H)), round(max(H))), tree=sum(Tr), low=sum(Lo), walk=sum(R.walk), route=len(L.route_samples()))
     les.save_current_level()

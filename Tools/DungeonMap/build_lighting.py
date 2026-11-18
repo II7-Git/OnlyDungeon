@@ -41,13 +41,13 @@ def build_ground():
         MEL.connect_material_expressions(uv, '', s, 'UVs')
         return s
 
-    uf, um, ub = co(5.0, 0), co(4.0, 800), co(71.0, 1500)
+    uf, um, ub = co(2.4, 0), co(3.0, 800), co(71.0, 1500)
     fb, fn, fr = tx(F + 'BaseColor', S.SAMPLERTYPE_COLOR, uf, -200), tx(F + 'Normal', S.SAMPLERTYPE_NORMAL, uf, 100), tx(F + 'Roughness', S.SAMPLERTYPE_LINEAR_GRAYSCALE, uf, 400)
     mb, mn, mr = tx(M + 'Albedo', S.SAMPLERTYPE_COLOR, um, 700), tx(M + 'Normal', S.SAMPLERTYPE_NORMAL, um, 1000), tx(M + 'Roughness', S.SAMPLERTYPE_COLOR, um, 1300)
     big = tx(F + 'BaseColor', S.SAMPLERTYPE_COLOR, ub, 1600)
 
     def blend(a, b, y):
-        n = e(unreal.MaterialExpressionLandscapeLayerBlend, -1000, y)
+        n = e(unreal.MaterialExpressionLandscapeLayerBlend, -300, y)
         rows = []
         for name in ('Forest', 'Mud'):
             i = unreal.LayerBlendInput()
@@ -59,30 +59,41 @@ def build_ground():
         MEL.connect_material_expressions(b, '', n, 'Layer Mud')
         return n
 
-    # 진흙 길을 숲 바닥보다 밝게 해 쿼터뷰에서 길이 읽히게 한다
-    mb2 = e(unreal.MaterialExpressionMultiply, -1200, 700)
-    mb2.set_editor_property('const_b', 2.4)
-    MEL.connect_material_expressions(mb, '', mb2, 'A')
-    bc, nr, ro = blend(fb, mb2, 0), blend(fn, mn, 400), blend(fr, mr, 800)
-    de = e(unreal.MaterialExpressionDesaturation, -750, 0)
-    MEL.connect_material_expressions(bc, '', de, '')
-    fc = e(unreal.MaterialExpressionConstant, -950, 200)
-    fc.set_editor_property('r', 0.7)
-    MEL.connect_material_expressions(fc, '', de, 'Fraction')
-    # 넓은 얼룩: 같은 텍스처를 크게 깔아 밝기를 흩뜨린다
-    gr = e(unreal.MaterialExpressionDesaturation, -1100, 1600)
-    MEL.connect_material_expressions(big, '', gr, '')
-    k = e(unreal.MaterialExpressionMultiply, -900, 1600)
+    def desat(src, amount, x, y):
+        d = e(unreal.MaterialExpressionDesaturation, x, y)
+        MEL.connect_material_expressions(src, '', d, '')
+        c = e(unreal.MaterialExpressionConstant, x - 200, y + 150)
+        c.set_editor_property('r', amount)
+        MEL.connect_material_expressions(c, '', d, 'Fraction')
+        return d
+
+    # 숲 바닥: 회색으로 어둡게, 대비를 낮춰 지푸라기 무늬가 튀지 않게 한다
+    fd = desat(fb, 0.85, -1150, -200)
+    gr = desat(big, 1.0, -1150, 1600)
+    k = e(unreal.MaterialExpressionMultiply, -950, 1600)
     k.set_editor_property('const_b', 2.6)
     MEL.connect_material_expressions(gr, '', k, 'A')
-    mx = e(unreal.MaterialExpressionMultiply, -550, 100)
-    MEL.connect_material_expressions(de, '', mx, 'A')
-    MEL.connect_material_expressions(k, '', mx, 'B')
-    dk = e(unreal.MaterialExpressionMultiply, -350, 100)
-    dk.set_editor_property('const_b', 0.62)
-    MEL.connect_material_expressions(mx, '', dk, 'A')
+    flat = e(unreal.MaterialExpressionLinearInterpolate, -950, -200)
+    flat.set_editor_property('const_a', 0.13)
+    flat.set_editor_property('const_alpha', 0.5)
+    MEL.connect_material_expressions(fd, '', flat, 'B')
+    fm = e(unreal.MaterialExpressionMultiply, -750, -100)
+    MEL.connect_material_expressions(flat, '', fm, 'A')
+    MEL.connect_material_expressions(k, '', fm, 'B')
+    fk = e(unreal.MaterialExpressionMultiply, -550, -100)
+    fk.set_editor_property('const_b', 0.34)
+    MEL.connect_material_expressions(fm, '', fk, 'A')
+    # 길: 밝고 따뜻한 흙색. 색과 밝기 모두 숲 바닥과 달라 쿼터뷰에서 바로 읽힌다
+    md = desat(mb, 0.25, -1150, 700)
+    tint = e(unreal.MaterialExpressionConstant3Vector, -950, 900)
+    tint.set_editor_property('constant', unreal.LinearColor(2.3, 1.75, 1.2, 1.0))
+    mt = e(unreal.MaterialExpressionMultiply, -750, 700)
+    MEL.connect_material_expressions(md, '', mt, 'A')
+    MEL.connect_material_expressions(tint, '', mt, 'B')
+    dk = blend(fk, mt, 0)
+    nr, ro = blend(fn, mn, 400), blend(fr, mr, 800)
     # 거칠기: 젖은 번들거림 방지 (0.78~1.0)
-    lp = e(unreal.MaterialExpressionLinearInterpolate, -550, 800)
+    lp = e(unreal.MaterialExpressionLinearInterpolate, -50, 800)
     lp.set_editor_property('const_a', 0.78)
     lp.set_editor_property('const_b', 1.0)
     MEL.connect_material_expressions(ro, '', lp, 'Alpha')
@@ -143,7 +154,7 @@ def build():
     room.set_editor_property('priority', 1.0)
     rs = room.get_editor_property('settings')
     rs.set_editor_property('override_auto_exposure_bias', True)
-    rs.set_editor_property('auto_exposure_bias', -0.5)
+    rs.set_editor_property('auto_exposure_bias', -0.1)
     room.set_editor_property('settings', rs)
     # 돔 천창 빛줄기
     sp = add(unreal.SpotLight, 'LT_OculusShaft', (CX, CY, FZ + 3700.0), (-90.0, 0.0, 0.0))
