@@ -58,6 +58,7 @@ private:
 	FVector TraceEnd = FVector(0.0, 0.0, -100.0);
 	float TraceRadius = 8.0f;
 	int32 TraceSamples = 4;
+	float TraceDownReach = 0.0f;
 	float FieldHitRadius = 220.0f;
 	float FieldHitHalfAngle = 60.0f;
 

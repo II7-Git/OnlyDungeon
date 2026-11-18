@@ -101,6 +101,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace", meta = (ClampMin = "2", ClampMax = "16"))
 	int32 TraceSamples = 4;
 
+	/** 판정을 아래쪽으로 늘리는 길이. 덩치 큰 적의 휘두르기가 사람 머리 위로 지나가지 않게 한다. (0이면 구 판정) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace", meta = (ClampMin = "0.0", Units = "cm"))
+	float TraceDownReach = 0.0f;
+
 	/** 필드 모드 범위 판정: 캐릭터 중심에서의 반경 (칼날 스윕 대신 전방 부채꼴로 여러 적을 한 번에 맞힌다) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Field", meta = (ClampMin = "10.0", Units = "cm"))
 	float FieldHitRadius = 220.0f;
