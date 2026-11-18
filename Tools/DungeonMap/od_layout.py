@@ -211,5 +211,8 @@ def terrain_at(r, u, v):
     # 보이는 범위만 채운다 (길에서 멀면 쿼터뷰에 보이지 않으므로 인스턴스를 아낀다)
     tree = 1.0 if (2.5 < d < 58.0 and t >= 18.0 and dd > DOME_OUTER_RADIUS + 9.0) else 0.0
     low = 1.0 if (0.6 < d < 34.0 and dd > DOME_OUTER_RADIUS + 4.0) else 0.0
-    edge = 1.0 if (0.4 < d < 2.8 and dd > DOME_OUTER_RADIUS + 4.0) else 0.0
+    # 잔돌: 길 가장자리에 띠로 두르지 않고, 군데군데 무리지어 길 안쪽과 숲으로 흩어지게 한다
+    clump = _value(u * 0.13 + 5.1, v * 0.13 - 3.7) + 0.5 * _value(u * 0.37 - 8.2, v * 0.37 + 6.4)
+    reach = max(d, 0.0) / 11.0 + (0.0 if d > 0.0 else 0.18 * min(dm, 3.0) / 3.0)
+    edge = 1.0 if (clump > 0.28 + reach and d < 12.0 and dd > DOME_OUTER_RADIUS + 4.0) else 0.0
     return h, mud, tree, low, edge

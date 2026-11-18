@@ -41,10 +41,13 @@ def build_ground():
         MEL.connect_material_expressions(uv, '', s, 'UVs')
         return s
 
-    uf, um, ub = co(2.4, 0), co(3.0, 800), co(71.0, 1500)
+    uf, um, ub = co(1.6, 0), co(3.0, 800), co(23.0, 1500)  # 숲 바닥 무늬가 커 보이지 않게 1.6m 반복
     fb, fn, fr = tx(F + 'BaseColor', S.SAMPLERTYPE_COLOR, uf, -200), tx(F + 'Normal', S.SAMPLERTYPE_NORMAL, uf, 100), tx(F + 'Roughness', S.SAMPLERTYPE_LINEAR_GRAYSCALE, uf, 400)
     mb, mn, mr = tx(M + 'Albedo', S.SAMPLERTYPE_COLOR, um, 700), tx(M + 'Normal', S.SAMPLERTYPE_NORMAL, um, 1000), tx(M + 'Roughness', S.SAMPLERTYPE_COLOR, um, 1300)
     big = tx(F + 'BaseColor', S.SAMPLERTYPE_COLOR, ub, 1600)
+    # 넓은 얼룩은 낮은 밉으로 뭉갠다. 그대로 쓰면 지푸라기 무늬가 수 미터 크기로 확대되어 보인다
+    big.set_editor_property('mip_value_mode', unreal.TextureMipValueMode.TMVM_MIP_LEVEL)
+    big.set_editor_property('const_mip_value', 5)
 
     def blend(a, b, y):
         n = e(unreal.MaterialExpressionLandscapeLayerBlend, -300, y)
@@ -67,21 +70,21 @@ def build_ground():
         MEL.connect_material_expressions(c, '', d, 'Fraction')
         return d
 
-    # 숲 바닥: 회색으로 어둡게, 대비를 낮춰 지푸라기 무늬가 튀지 않게 한다
-    fd = desat(fb, 0.85, -1150, -200)
+    # 숲 바닥: 채도를 낮춰 어둡게, 작은 무늬는 살리고 넓은 얼룩으로 반복을 가린다
+    fd = desat(fb, 0.55, -1150, -200)
     gr = desat(big, 1.0, -1150, 1600)
     k = e(unreal.MaterialExpressionMultiply, -950, 1600)
     k.set_editor_property('const_b', 2.6)
     MEL.connect_material_expressions(gr, '', k, 'A')
     flat = e(unreal.MaterialExpressionLinearInterpolate, -950, -200)
     flat.set_editor_property('const_a', 0.13)
-    flat.set_editor_property('const_alpha', 0.5)
+    flat.set_editor_property('const_alpha', 0.95)
     MEL.connect_material_expressions(fd, '', flat, 'B')
     fm = e(unreal.MaterialExpressionMultiply, -750, -100)
     MEL.connect_material_expressions(flat, '', fm, 'A')
     MEL.connect_material_expressions(k, '', fm, 'B')
     fk = e(unreal.MaterialExpressionMultiply, -550, -100)
-    fk.set_editor_property('const_b', 0.34)
+    fk.set_editor_property('const_b', 0.46)
     MEL.connect_material_expressions(fm, '', fk, 'A')
     # 길: 밝고 따뜻한 흙색. 색과 밝기 모두 숲 바닥과 달라 쿼터뷰에서 바로 읽힌다
     md = desat(mb, 0.25, -1150, 700)
