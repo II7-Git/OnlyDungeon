@@ -31,6 +31,7 @@ public:
 
 protected:
 	virtual bool Initialize() override;
+	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -54,9 +55,12 @@ protected:
 
 private:
 	void BuildDefaultLayout();
+	void Bind();
 	void Unbind();
 	void RefreshHealth();
 
+	/** 표시 대상. 위젯이 화면에 다시 올라올 때 체력 이벤트를 다시 연결하는 데 쓴다. */
+	TWeakObjectPtr<AODCharacterBase> ObservedCharacter;
 	TWeakObjectPtr<UAbilitySystemComponent> ObservedASC;
 	TArray<TPair<FGameplayAttribute, FDelegateHandle>> AttributeHandles;
 };

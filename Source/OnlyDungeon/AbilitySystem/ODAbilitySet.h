@@ -84,6 +84,9 @@ public:
 	 */
 	void GiveToAbilitySystem(UODAbilitySystemComponent* ASC, FODAbilitySet_GrantedHandles* OutGrantedHandles, UObject* SourceObject = nullptr) const;
 
+	/** 세트의 즉시 적용 이펙트(초기 수치 GE)만 다시 적용한다. 어빌리티는 건드리지 않으므로 진행 중인 행동이 끊기지 않는다. */
+	void ReapplyInstantEffects(UODAbilitySystemComponent* ASC) const;
+
 protected:
 	/** 부여할 어빌리티 목록 */
 	UPROPERTY(EditDefaultsOnly, Category = "Gameplay Abilities", meta = (TitleProperty = "Ability"))

@@ -82,7 +82,23 @@ void UODEnemyNameplateWidget::BuildDefaultLayout()
 
 void UODEnemyNameplateWidget::SetCharacter(AODCharacterBase* InCharacter)
 {
+	ObservedCharacter = InCharacter;
+	Bind();
+}
+
+void UODEnemyNameplateWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+
+	// 위젯 컴포넌트는 이름표를 숨길 때 위젯을 화면에서 내리고(NativeDestruct) 다시 보일 때 올린다(NativeConstruct).
+	// 내려가 있는 동안 끊긴 체력 이벤트를 다시 연결하고, 그 사이 바뀐 체력도 반영한다.
+	Bind();
+}
+
+void UODEnemyNameplateWidget::Bind()
+{
 	Unbind();
+	AODCharacterBase* InCharacter = ObservedCharacter.Get();
 	if (!IsValid(InCharacter))
 	{
 		return;

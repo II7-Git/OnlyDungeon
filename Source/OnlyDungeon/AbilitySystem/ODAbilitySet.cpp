@@ -50,6 +50,22 @@ void FODAbilitySet_GrantedHandles::TakeFromAbilitySystem(UODAbilitySystemCompone
 	GameplayEffectHandles.Reset();
 }
 
+void UODAbilitySet::ReapplyInstantEffects(UODAbilitySystemComponent* ASC) const
+{
+	if (!IsValid(ASC))
+	{
+		return;
+	}
+	for (const FODAbilitySet_GameplayEffect& Entry : GrantedGameplayEffects)
+	{
+		const UGameplayEffect* EffectCDO = IsValid(Entry.GameplayEffect) ? Entry.GameplayEffect->GetDefaultObject<UGameplayEffect>() : nullptr;
+		if (EffectCDO && EffectCDO->DurationPolicy == EGameplayEffectDurationType::Instant)
+		{
+			ASC->ApplyGameplayEffectToSelf(EffectCDO, Entry.EffectLevel, ASC->MakeEffectContext());
+		}
+	}
+}
+
 void UODAbilitySet::GiveToAbilitySystem(UODAbilitySystemComponent* ASC, FODAbilitySet_GrantedHandles* OutGrantedHandles, UObject* SourceObject) const
 {
 	if (!IsValid(ASC))

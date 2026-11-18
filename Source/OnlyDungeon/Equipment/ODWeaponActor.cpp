@@ -46,6 +46,7 @@ void AODWeaponActor::InitializeFromData(const UODWeaponData* InWeaponData)
 	TraceEnd = InWeaponData->TraceEnd;
 	TraceRadius = InWeaponData->TraceRadius;
 	TraceSamples = FMath::Max(InWeaponData->TraceSamples, 2);
+	TraceDownReach = InWeaponData->TraceDownReach;
 	FieldHitRadius = InWeaponData->FieldHitRadius;
 	FieldHitHalfAngle = InWeaponData->FieldHitHalfAngle;
 }
@@ -73,14 +74,16 @@ void AODWeaponActor::TickTrace()
 	QueryParams.AddIgnoredActor(GetOwner());
 
 	const FCollisionObjectQueryParams ObjectParams(ECC_Pawn);
-	const FCollisionShape Shape = FCollisionShape::MakeSphere(TraceRadius);
+	// 아래로 늘린 판정은 세운 캡슐로 쓸어 내린다.
+	const FCollisionShape Shape = TraceDownReach > 0.0f ? FCollisionShape::MakeCapsule(TraceRadius, TraceRadius + TraceDownReach * 0.5f) : FCollisionShape::MakeSphere(TraceRadius);
+	const FVector ShapeOffset(0.0, 0.0, -TraceDownReach * 0.5f);
 	const bool bDrawDebug = CVarDrawWeaponTrace.GetValueOnGameThread();
 
 	TArray<FHitResult> Hits;
 	for (int32 Index = 0; Index < CurrentPoints.Num() && PreviousPoints.IsValidIndex(Index); ++Index)
 	{
 		Hits.Reset();
-		World->SweepMultiByObjectType(Hits, PreviousPoints[Index], CurrentPoints[Index], FQuat::Identity, ObjectParams, Shape, QueryParams);
+		World->SweepMultiByObjectType(Hits, PreviousPoints[Index] + ShapeOffset, CurrentPoints[Index] + ShapeOffset, FQuat::Identity, ObjectParams, Shape, QueryParams);
 
 		if (bDrawDebug)
 		{
