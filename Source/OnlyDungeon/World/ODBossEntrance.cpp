@@ -61,6 +61,15 @@ AODBossEntrance::AODBossEntrance(const FObjectInitializer& ObjectInitializer)
 	Lintel->SetRelativeLocation(FVector(0.0, 0.0, 450.0));
 	Lintel->SetRelativeScale3D(FVector(0.4, 4.0, 1.0));
 
+	// 안개벽은 보이기만 하는 판이다. 실제로 막는 것은 문짝이다.
+	FogWall = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("FogWall"));
+	FogWall->SetupAttachment(SceneRoot);
+	FogWall->SetRelativeLocation(FVector(-45.0, 0.0, 230.0));
+	FogWall->SetRelativeRotation(FRotator(90.0, 0.0, 0.0));
+	FogWall->SetRelativeScale3D(FVector(4.6, 3.6, 1.0));
+	FogWall->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	FogWall->SetCastShadow(false);
+
 	InteractionTrigger = CreateDefaultSubobject<UBoxComponent>(TEXT("InteractionTrigger"));
 	InteractionTrigger->SetupAttachment(SceneRoot);
 	InteractionTrigger->SetRelativeLocation(FVector(-250.0, 0.0, 150.0));
@@ -158,6 +167,9 @@ void AODBossEntrance::StartEntrySequence()
 	{
 		return;
 	}
+
+	// 안개벽을 걷고 들어간다.
+	FogWall->SetVisibility(false);
 
 	// 2) 입장 시퀀스 재생 (EntryPoint 기준)
 	if (IsValid(EntrySequence))
@@ -479,6 +491,7 @@ void AODBossEntrance::ResetForTest()
 	SequenceActor = nullptr;
 
 	SetDoorAlpha(0.0f);
+	FogWall->SetVisibility(true);
 	const bool bWasEntered = bUsed || bInProgress;
 	bUsed = false;
 	bInProgress = false;
