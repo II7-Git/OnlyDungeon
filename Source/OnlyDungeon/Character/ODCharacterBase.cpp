@@ -119,6 +119,14 @@ void AODCharacterBase::ResetForTest()
 	Revive();
 }
 
+void AODCharacterBase::RestoreVitals()
+{
+	if (IsValid(DefaultAbilitySet))
+	{
+		DefaultAbilitySet->ReapplyInstantEffects(AbilitySystemComponent);
+	}
+}
+
 void AODCharacterBase::Revive()
 {
 	if (!IsValid(AbilitySystemComponent))

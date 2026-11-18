@@ -40,8 +40,11 @@ public:
 	UODLockOnComponent* GetLockOnComponent() const { return LockOnComponent; }
 	UODPotionComponent* GetPotionComponent() const { return PotionComponent; }
 
-	/** 부활·휴식: 기본 처리에 더해 회복 물약을 가득 채운다. */
+	/** 부활: 기본 처리에 더해 회복 물약을 가득 채운다. */
 	virtual void Revive() override;
+
+	/** 휴식: 기본 회복에 더해 회복 물약을 가득 채운다. */
+	virtual void RestoreVitals() override;
 
 	/** 락온 컴포넌트가 잡고 있는 대상 (없으면 nullptr) */
 	virtual AActor* GetLockOnTarget() const override;

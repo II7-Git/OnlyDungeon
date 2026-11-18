@@ -153,8 +153,8 @@ void AODGameMode::RestAtRespawnPoint(AODRespawnPoint* Point, APawn* Pawn)
 
 	ActiveRespawnPoint = Point;
 
-	// 휴식: 회복 + 적 초기화. 플레이어는 그 자리에 둔다.
-	Character->Revive();
+	// 휴식: 회복 + 적 초기화. 플레이어는 그 자리에 둔다. (휴식 모션이 끊기지 않도록 Revive 대신 수치만 회복)
+	Character->RestoreVitals();
 	if (UODFieldSubsystem* Field = GetWorld() ? GetWorld()->GetSubsystem<UODFieldSubsystem>() : nullptr)
 	{
 		Field->ResetAllEnemies();

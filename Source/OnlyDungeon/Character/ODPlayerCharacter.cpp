@@ -173,11 +173,12 @@ void AODPlayerCharacter::Input_Move(const FInputActionValue& Value)
 		BufferedMoveTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	}
 
-	// 공격·가드 중에는 이동 입력을 받지 않는다.
+	// 공격·가드·휴식 중에는 이동 입력을 받지 않는다.
 	// 공격 모션은 제자리 모션(루트 이동 없음)이라 이동 입력을 받으면 미끄러져 보인다. 전진은 콤보 어빌리티의 StepDistance가 담당한다.
 	// 행동 캔슬은 회피만 가능하다. (입력 방향은 위에서 기록해 두어 회피 방향에 쓰인다)
 	if (IsValid(AbilitySystemComponent)
-		&& (AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Defending) || AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Attacking)))
+		&& (AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Defending) || AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Attacking)
+			|| AbilitySystemComponent->HasMatchingGameplayTag(ODGameplayTags::State_Resting)))
 	{
 		return;
 	}
@@ -248,7 +249,17 @@ void AODPlayerCharacter::Revive()
 {
 	Super::Revive();
 
-	// 휴식·사망(부활)·테스트 초기화 모두 이 경로를 지나므로 여기서 물약을 채운다.
+	// 사망(부활)·테스트 초기화 시 물약을 채운다.
+	if (IsValid(PotionComponent))
+	{
+		PotionComponent->Refill();
+	}
+}
+
+void AODPlayerCharacter::RestoreVitals()
+{
+	Super::RestoreVitals();
+
 	if (IsValid(PotionComponent))
 	{
 		PotionComponent->Refill();

@@ -71,10 +71,12 @@ public:
 	/**
 	 * 부활(상태 초기화): 진행 중 행동·사망 연출 취소, 사망 해제, 기본 어빌리티 세트 재부여(초기 수치 GE·패시브 재발동),
 	 * 현재 무기 재장착, 이동·충돌 복구. 위치는 바꾸지 않는다. (옮기는 건 호출한 쪽: 게임 모드, 적의 ResetToSpawn)
-	 * 리스폰 포인트 휴식(회복)에도 쓴다.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "OD|Character")
 	virtual void Revive();
+
+	/** 휴식 회복: 체력·스태미나 등 초기 수치만 되돌린다. Revive와 달리 진행 중인 어빌리티·몽타주를 끊지 않는다. */
+	virtual void RestoreVitals();
 
 	/** [테스트용] 상태 초기화. 테스트 맵의 초기화 키(F5)에서 사용한다. (= Revive) */
 	UFUNCTION(BlueprintCallable, Category = "OD|Test")

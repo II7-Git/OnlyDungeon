@@ -35,6 +35,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Invulnerable, "State.Invulnerable", "무적 (회피 무적 시간 등)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_LockOn, "State.LockOn", "락온 중");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Drinking, "State.Drinking", "회복 물약을 마시는 중");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Resting, "State.Resting", "세이브 포인트에서 휴식 중");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_1, "State.Phase.1", "보스 1페이즈");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_2, "State.Phase.2", "보스 2페이즈 (체력이 일정 비율 이하)");
 
@@ -64,6 +65,7 @@ namespace ODGameplayTags
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Boss_Intro, "Event.Boss.Intro", "보스가 전투를 시작함 (등장 포효)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Boss_PhaseChange, "Event.Boss.PhaseChange", "보스가 다음 페이즈로 넘어감 (전환 포효)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Rest, "Event.Rest", "세이브 포인트에서 휴식 시작 (OptionalObject = 세이브 포인트)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Hit, "GameplayCue.Hit", "근접 공격 피격 이펙트 (피해 GE 실행 시, 맞은 캐릭터의 HitImpactEffect)");
 
 	// ---------- 무기 종류 ----------
