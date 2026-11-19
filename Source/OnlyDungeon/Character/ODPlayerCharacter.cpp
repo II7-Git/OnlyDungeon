@@ -246,8 +246,16 @@ void AODPlayerCharacter::Input_AbilityReleased(FGameplayTag InputTag)
 void AODPlayerCharacter::Input_DodgePressed()
 {
 	bDodgeKeyHeld = true;
-	bDodgeKeyHoldConsumed = false;
 	bSprintStartedThisPress = false;
+
+	// 누르는 순간 항상 회피한다. (캔슬 구간·방향 처리는 ASC의 회피 입력 처리와 같다)
+	if (IsValid(AbilitySystemComponent))
+	{
+		AbilitySystemComponent->AbilityInputTagPressed(ODGameplayTags::InputTag_Dodge);
+		AbilitySystemComponent->AbilityInputTagReleased(ODGameplayTags::InputTag_Dodge);
+	}
+
+	// 그대로 누르고 있으면 회피가 끝나는 대로 달리기로 이어진다.
 	GetWorldTimerManager().SetTimer(SprintHoldTimer, this, &ThisClass::TryStartSprintFromHold, SprintHoldTime, false);
 }
 
@@ -261,32 +269,16 @@ void AODPlayerCharacter::Input_DodgeReleased()
 	bDodgeKeyHeld = false;
 	GetWorldTimerManager().ClearTimer(SprintHoldTimer);
 
-	if (!IsValid(AbilitySystemComponent))
+	// 달리는 중이면 끝낸다. (달리기는 키를 떼면 끝나는 어빌리티)
+	if (IsValid(AbilitySystemComponent))
 	{
-		return;
-	}
-
-	if (bDodgeKeyHoldConsumed)
-	{
-		// 길게 눌렀다: 달리는 중이면 끝낸다. (달리기는 키를 떼면 끝나는 어빌리티)
 		AbilitySystemComponent->AbilityInputTagReleased(ODGameplayTags::InputTag_Sprint);
-		return;
 	}
-
-	// 짧게 눌렀다: 떼는 순간 회피한다. (캔슬 구간·방향 처리는 기존 회피 입력과 같다)
-	AbilitySystemComponent->AbilityInputTagPressed(ODGameplayTags::InputTag_Dodge);
-	AbilitySystemComponent->AbilityInputTagReleased(ODGameplayTags::InputTag_Dodge);
 }
 
 void AODPlayerCharacter::TryStartSprintFromHold()
 {
-	if (!bDodgeKeyHeld || !IsValid(AbilitySystemComponent) || IsDead())
-	{
-		return;
-	}
-
-	bDodgeKeyHoldConsumed = true;
-	if (bSprintStartedThisPress)
+	if (!bDodgeKeyHeld || bSprintStartedThisPress || !IsValid(AbilitySystemComponent) || IsDead())
 	{
 		return;
 	}
@@ -297,7 +289,7 @@ void AODPlayerCharacter::TryStartSprintFromHold()
 		return;
 	}
 
-	// 공격·회피 중이라 지금은 못 달린다. 키를 누르고 있으면 끝나는 대로 달리기 시작한다.
+	// 회피·공격 중이라 지금은 못 달린다. 키를 누르고 있으면 끝나는 대로 달리기 시작한다.
 	GetWorldTimerManager().SetTimer(SprintHoldTimer, this, &ThisClass::TryStartSprintFromHold, SprintRetryInterval, false);
 }
 
