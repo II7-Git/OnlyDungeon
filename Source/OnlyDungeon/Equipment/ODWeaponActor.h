@@ -67,6 +67,14 @@ private:
 	float FieldHitHalfAngle = 60.0f;
 
 	bool bTracing = false;
+
+	/** 판정 지점 버퍼. TickTrace가 매 프레임 쓰므로 멤버로 두고 재사용한다. (Hot Path 할당 방지, CLAUDE.md 12-2) */
 	TArray<FVector> PreviousPoints;
-	TArray<TWeakObjectPtr<AActor>> HitActors;
+	TArray<FVector> CurrentPoints;
+
+	/** 스윕 결과 재사용 버퍼 */
+	TArray<FHitResult> HitBuffer;
+
+	/** 한 구간에서 이미 맞은 대상. 한 번 휘두르기에 맞는 수가 적어 인라인 배열의 선형 검색이 가장 싸다. */
+	TArray<TWeakObjectPtr<AActor>, TInlineAllocator<8>> HitActors;
 };
