@@ -4,6 +4,7 @@
 
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "Character/ODCharacterBase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/ODGameplayTags.h"
 #include "Equipment/ODEquipmentComponent.h"
@@ -93,7 +94,9 @@ AODWeaponActor* UODAnimNotifyState_WeaponTrace::FindWeapon(const USkeletalMeshCo
 		return nullptr;
 	}
 
-	const UODEquipmentComponent* Equipment = Owner->FindComponentByClass<UODEquipmentComponent>();
+	// NotifyTick에서 매 프레임 불리므로 캐릭터의 게터로 O(1) 조회한다. 캐릭터가 아닌 소유자(에디터 미리보기 등)만 컴포넌트 검색으로 대체한다.
+	const AODCharacterBase* OwnerCharacter = Cast<AODCharacterBase>(Owner);
+	const UODEquipmentComponent* Equipment = OwnerCharacter ? OwnerCharacter->GetEquipmentComponent() : Owner->FindComponentByClass<UODEquipmentComponent>();
 	if (!IsValid(Equipment))
 	{
 		return nullptr;
