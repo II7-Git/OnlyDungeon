@@ -18,6 +18,38 @@
 
 namespace ODStateTreeNodes
 {
+	/**
+	 * 경로 이동 허용 반경을 성공 판정 반경보다 이만큼 줄여 요청한다.
+	 * 길찾기가 허용 반경 가장자리에서 멈추면 다음 판정에서 '아직 멀다'로 나와 이동을 반복하므로 여유를 둔다.
+	 */
+	constexpr float ChaseAcceptanceSlack = 40.0f;
+	constexpr float ReturnAcceptanceSlack = 30.0f;
+	constexpr float PatternApproachSlack = 50.0f;
+
+	/** 경로 이동 허용 반경 하한 (0에 가까우면 길찾기가 도착 판정을 못 한다) */
+	constexpr float MinPathAcceptance = 10.0f;
+
+	/** 간 보기 중 빈틈을 공략할 수 있는 최대 거리 */
+	constexpr float StrafePunishRange = 300.0f;
+
+	/** 유지 거리에서 이만큼 벗어나면 안쪽·바깥쪽 이동이 최대가 된다. */
+	constexpr float StrafeRadialCorrectionRange = 150.0f;
+
+	/** 간 보기 속도의 이 비율보다 느리면 막힌 것으로 본다. */
+	constexpr float StrafeStuckSpeedRatio = 0.2f;
+
+	/** 막힌 상태가 이 시간 이상 이어지면 반대 방향으로 돈다. */
+	constexpr float StrafeStuckReverseTime = 0.4f;
+
+	/** 매복 대기 몽타주를 멈출 때 블렌드 아웃 시간 */
+	constexpr float AmbushLoopBlendOutTime = 0.2f;
+
+	/** 성공 판정 반경에서 여유를 뺀 길찾기 허용 반경 */
+	float GetPathAcceptance(float AcceptanceRadius, float Slack)
+	{
+		return FMath::Max(AcceptanceRadius - Slack, MinPathAcceptance);
+	}
+
 	AODEnemyCharacter* GetEnemy(AActor* Actor)
 	{
 		AODEnemyCharacter* Enemy = Cast<AODEnemyCharacter>(Actor);
@@ -93,7 +125,7 @@ EStateTreeRunStatus FODStateTreeChaseTargetTask::EnterState(FStateTreeExecutionC
 
 	// 사거리보다 조금 안쪽까지 들어가게 요청한다. (도착 판정은 Tick의 중심 간 거리 검사)
 	// bStopOnOverlap을 끈다: 켜면 캡슐이 닿는 순간 멈춰, 몸집이 큰 적(보스)은 중심 거리가 사거리 안으로 들어오지 못한다.
-	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, FMath::Max(Data.AcceptanceRadius - 40.0f, 10.0f), false, true, false);
+	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, ODStateTreeNodes::GetPathAcceptance(Data.AcceptanceRadius, ODStateTreeNodes::ChaseAcceptanceSlack), false, true, false);
 	return Result == EPathFollowingRequestResult::Failed ? EStateTreeRunStatus::Failed : EStateTreeRunStatus::Running;
 }
 
@@ -115,7 +147,7 @@ EStateTreeRunStatus FODStateTreeChaseTargetTask::Tick(FStateTreeExecutionContext
 	// 길찾기가 끝났는데 아직 멀면(대상이 움직였거나 막힘) 다시 요청한다.
 	if (Controller->GetMoveStatus() == EPathFollowingStatus::Idle)
 	{
-		if (Controller->MoveToActor(Target, FMath::Max(Data.AcceptanceRadius - 40.0f, 10.0f), false, true, false) == EPathFollowingRequestResult::Failed)
+		if (Controller->MoveToActor(Target, ODStateTreeNodes::GetPathAcceptance(Data.AcceptanceRadius, ODStateTreeNodes::ChaseAcceptanceSlack), false, true, false) == EPathFollowingRequestResult::Failed)
 		{
 			return EStateTreeRunStatus::Failed;
 		}
@@ -148,7 +180,7 @@ EStateTreeRunStatus FODStateTreeReturnHomeTask::EnterState(FStateTreeExecutionCo
 
 	if (FVector::Dist2D(Enemy->GetActorLocation(), Enemy->GetSpawnLocation()) > Data.AcceptanceRadius)
 	{
-		Controller->MoveToLocation(Enemy->GetSpawnLocation(), FMath::Max(Data.AcceptanceRadius - 30.0f, 10.0f));
+		Controller->MoveToLocation(Enemy->GetSpawnLocation(), ODStateTreeNodes::GetPathAcceptance(Data.AcceptanceRadius, ODStateTreeNodes::ReturnAcceptanceSlack));
 	}
 	return EStateTreeRunStatus::Running;
 }
@@ -174,7 +206,7 @@ EStateTreeRunStatus FODStateTreeReturnHomeTask::Tick(FStateTreeExecutionContext&
 	{
 		if (Controller->GetMoveStatus() == EPathFollowingStatus::Idle)
 		{
-			Controller->MoveToLocation(Enemy->GetSpawnLocation(), FMath::Max(Data.AcceptanceRadius - 30.0f, 10.0f));
+			Controller->MoveToLocation(Enemy->GetSpawnLocation(), ODStateTreeNodes::GetPathAcceptance(Data.AcceptanceRadius, ODStateTreeNodes::ReturnAcceptanceSlack));
 		}
 		return EStateTreeRunStatus::Running;
 	}
@@ -382,7 +414,7 @@ EStateTreeRunStatus FODStateTreeExecutePatternTask::EnterState(FStateTreeExecuti
 	}
 
 	// 사거리 밖: 다가간다. (bStopOnOverlap 끔: 큰 적도 중심 거리가 사거리 안으로 들어오게)
-	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, FMath::Max(Pattern->MaxRange - 50.0f, 10.0f), false, true, false);
+	const EPathFollowingRequestResult::Type Result = Controller->MoveToActor(Target, ODStateTreeNodes::GetPathAcceptance(Pattern->MaxRange, ODStateTreeNodes::PatternApproachSlack), false, true, false);
 	return Result == EPathFollowingRequestResult::Failed ? EStateTreeRunStatus::Failed : EStateTreeRunStatus::Running;
 }
 
@@ -414,7 +446,7 @@ EStateTreeRunStatus FODStateTreeExecutePatternTask::Tick(FStateTreeExecutionCont
 		}
 		if (Controller->GetMoveStatus() == EPathFollowingStatus::Idle)
 		{
-			Controller->MoveToActor(Target, FMath::Max(Pattern->MaxRange - 50.0f, 10.0f), false, true, false);
+			Controller->MoveToActor(Target, ODStateTreeNodes::GetPathAcceptance(Pattern->MaxRange, ODStateTreeNodes::PatternApproachSlack), false, true, false);
 		}
 		return EStateTreeRunStatus::Running;
 	}
@@ -524,7 +556,7 @@ EStateTreeRunStatus FODStateTreeStrafeTask::Tick(FStateTreeExecutionContext& Con
 	{
 		return EStateTreeRunStatus::Succeeded;
 	}
-	if (Data.Elapsed >= Data.MinDuration && (Combat->ShouldPunish(Target, Distance, 300.0f) || Combat->IsAttackReady()))
+	if (Data.Elapsed >= Data.MinDuration && (Combat->ShouldPunish(Target, Distance, ODStateTreeNodes::StrafePunishRange) || Combat->IsAttackReady()))
 	{
 		return EStateTreeRunStatus::Succeeded;
 	}
@@ -542,15 +574,15 @@ EStateTreeRunStatus FODStateTreeStrafeTask::Tick(FStateTreeExecutionContext& Con
 	const FVector Radial = ToTarget.GetSafeNormal();
 	const FVector Tangent = FVector::CrossProduct(FVector::UpVector, Radial) * Data.Direction;
 	const float DistanceError = Distance - Set->StrafeDistance;
-	const float RadialWeight = FMath::Clamp(DistanceError / 150.0f, -1.0f, 1.0f);
+	const float RadialWeight = FMath::Clamp(DistanceError / ODStateTreeNodes::StrafeRadialCorrectionRange, -1.0f, 1.0f);
 	const FVector MoveDirection = (Tangent + Radial * RadialWeight).GetSafeNormal();
 	Enemy->AddMovementInput(MoveDirection, 1.0f);
 
 	// 벽 등에 막혀 거의 못 움직이면 반대로 돈다.
-	if (Enemy->GetVelocity().Size2D() < Set->StrafeSpeed * 0.2f)
+	if (Enemy->GetVelocity().Size2D() < Set->StrafeSpeed * ODStateTreeNodes::StrafeStuckSpeedRatio)
 	{
 		Data.StuckTime += DeltaTime;
-		if (Data.StuckTime > 0.4f)
+		if (Data.StuckTime > ODStateTreeNodes::StrafeStuckReverseTime)
 		{
 			Data.Direction *= -1.0f;
 			Data.StuckTime = 0.0f;
@@ -593,7 +625,7 @@ namespace ODStateTreeNodes
 		Data.bLying = false;
 		if (UAnimInstance* Anim = IsValid(Enemy) && IsValid(Enemy->GetMesh()) ? Enemy->GetMesh()->GetAnimInstance() : nullptr)
 		{
-			Anim->Montage_Stop(0.2f, Enemy->GetAmbushLoopMontage());
+			Anim->Montage_Stop(ODStateTreeNodes::AmbushLoopBlendOutTime, Enemy->GetAmbushLoopMontage());
 		}
 	}
 }
@@ -647,7 +679,7 @@ EStateTreeRunStatus FODStateTreeIdleBehaviorTask::Tick(FStateTreeExecutionContex
 		}
 		if (Controller->GetMoveStatus() == EPathFollowingStatus::Idle)
 		{
-			Controller->MoveToLocation(Goal, FMath::Max(Data.AcceptanceRadius - 30.0f, 10.0f));
+			Controller->MoveToLocation(Goal, ODStateTreeNodes::GetPathAcceptance(Data.AcceptanceRadius, ODStateTreeNodes::ReturnAcceptanceSlack));
 		}
 		return false;
 	};

@@ -24,6 +24,23 @@
 #include "Core/ODLogChannels.h"
 #include "Engine/World.h"
 
+namespace
+{
+	/** 이름표 표시 여부(거리·교전·피해) 재판정 주기. 매 프레임일 필요가 없어 타이머로 돈다. */
+	constexpr float NameplateRefreshInterval = 0.2f;
+
+	/** 캡슐이 없을 때 이름표 높이 기준으로 쓰는 반높이 (기본 캐릭터 캡슐 크기) */
+	constexpr float FallbackCapsuleHalfHeight = 90.0f;
+
+	/** 사망 카메라 흔들림: 이 반경 안은 최대 세기, 바깥 반경까지 줄어든다. */
+	constexpr float DeathShakeInnerRadius = 0.0f;
+	constexpr float DeathShakeOuterRadius = 4000.0f;
+	constexpr float DeathShakeFalloff = 1.0f;
+
+	/** 귀환 중 시작 위치에서 이 거리 안에 들어오면 귀환을 마친 것으로 본다. */
+	constexpr float ReturnHomeArrivalDistance = 200.0f;
+}
+
 AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -85,14 +102,14 @@ void AODEnemyCharacter::BeginPlay()
 		if (bShowNameplate)
 		{
 			// 캡슐 꼭대기 위에 둔다. (루트 스케일이 적용되므로 스케일 전 높이 기준)
-			const float HalfHeight = IsValid(GetCapsuleComponent()) ? GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.0f;
+			const float HalfHeight = IsValid(GetCapsuleComponent()) ? GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : FallbackCapsuleHalfHeight;
 			NameplateComponent->SetRelativeLocation(FVector(0.0, 0.0, HalfHeight + NameplateHeightOffset));
 			NameplateComponent->InitWidget();
 			if (UODEnemyNameplateWidget* Nameplate = Cast<UODEnemyNameplateWidget>(NameplateComponent->GetUserWidgetObject()))
 			{
 				Nameplate->SetCharacter(this);
 			}
-			GetWorldTimerManager().SetTimer(NameplateTimer, this, &ThisClass::RefreshNameplate, 0.2f, true, 0.0f);
+			GetWorldTimerManager().SetTimer(NameplateTimer, this, &ThisClass::RefreshNameplate, NameplateRefreshInterval, true, 0.0f);
 		}
 		else
 		{
@@ -187,7 +204,7 @@ void AODEnemyCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	}
 	if (DeathCameraShake)
 	{
-		UGameplayStatics::PlayWorldCameraShake(this, DeathCameraShake, GetActorLocation(), 0.0f, 4000.0f, 1.0f, false);
+		UGameplayStatics::PlayWorldCameraShake(this, DeathCameraShake, GetActorLocation(), DeathShakeInnerRadius, DeathShakeOuterRadius, DeathShakeFalloff, false);
 	}
 	if (IsValid(CombatComponent))
 	{
@@ -254,7 +271,7 @@ AActor* AODEnemyCharacter::UpdateCombatTarget()
 	}
 
 	const float DistanceFromSpawn = FVector::Dist2D(GetActorLocation(), GetSpawnLocation());
-	if (bReturningHome && DistanceFromSpawn <= 200.0f)
+	if (bReturningHome && DistanceFromSpawn <= ReturnHomeArrivalDistance)
 	{
 		bReturningHome = false;
 	}

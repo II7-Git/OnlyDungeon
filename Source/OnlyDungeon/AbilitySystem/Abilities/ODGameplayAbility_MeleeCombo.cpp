@@ -17,6 +17,15 @@
 #include "TimerManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
+namespace
+{
+	/** 추적 회전·회전 베기의 갱신 주기. 짧은 동안만 필요하므로 Tick 대신 60Hz 타이머로 돈다. */
+	constexpr float RotationUpdateInterval = 1.0f / 60.0f;
+
+	/** 전진 루트 모션의 최소 지속 시간 (0이면 태스크가 바로 끝나 전진하지 않는다) */
+	constexpr float MinStepDuration = 0.01f;
+}
+
 UODGameplayAbility_MeleeCombo::UODGameplayAbility_MeleeCombo(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -303,7 +312,7 @@ void UODGameplayAbility_MeleeCombo::StartTracking()
 	TrackRemaining = Step.TrackTargetDuration;
 	LastTrackTime = World->GetTimeSeconds();
 	// 회전은 짧은 동안만 필요하므로 Tick 대신 60Hz 타이머로 돈다.
-	World->GetTimerManager().SetTimer(TrackTimer, this, &ThisClass::TickTracking, 1.0f / 60.0f, true);
+	World->GetTimerManager().SetTimer(TrackTimer, this, &ThisClass::TickTracking, RotationUpdateInterval, true);
 }
 
 void UODGameplayAbility_MeleeCombo::TickTracking()
@@ -380,7 +389,7 @@ void UODGameplayAbility_MeleeCombo::BeginSpin()
 	bSpinning = true;
 	SpinRemaining = ComboSteps[ComboIndex].SpinDuration;
 	LastSpinTime = World->GetTimeSeconds();
-	World->GetTimerManager().SetTimer(SpinTimer, this, &ThisClass::TickSpin, 1.0f / 60.0f, true);
+	World->GetTimerManager().SetTimer(SpinTimer, this, &ThisClass::TickSpin, RotationUpdateInterval, true);
 }
 
 void UODGameplayAbility_MeleeCombo::TickSpin()
@@ -471,7 +480,7 @@ void UODGameplayAbility_MeleeCombo::ApplyStepForce()
 	}
 
 	const FODComboStep& Step = ComboSteps[ComboIndex];
-	const float Duration = FMath::Max(Step.StepDuration, 0.01f);
+	const float Duration = FMath::Max(Step.StepDuration, MinStepDuration);
 	const FVector Direction = Character->GetActorForwardVector().GetSafeNormal2D();
 
 	// 비가산(덮어쓰기) 방식이라 이동 입력과 섞이지 않고, 끝나면 속도를 0으로 맞춰 미끄러지지 않게 한다.
