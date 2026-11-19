@@ -26,6 +26,7 @@
 #include "Interaction/ODInteractionComponent.h"
 #include "World/ODBossEntrance.h"
 #include "Core/ODGameMode.h"
+#include "TimerManager.h"
 
 AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -215,6 +216,13 @@ void AODPlayerCharacter::Input_Look(const FInputActionValue& Value)
 
 void AODPlayerCharacter::Input_AbilityPressed(FGameplayTag InputTag)
 {
+	// 회피 키는 짧게/길게 누르기를 구분해야 하므로 바로 넘기지 않는다.
+	if (InputTag.MatchesTagExact(ODGameplayTags::InputTag_Dodge))
+	{
+		Input_DodgePressed();
+		return;
+	}
+
 	if (IsValid(AbilitySystemComponent))
 	{
 		AbilitySystemComponent->AbilityInputTagPressed(InputTag);
@@ -223,10 +231,66 @@ void AODPlayerCharacter::Input_AbilityPressed(FGameplayTag InputTag)
 
 void AODPlayerCharacter::Input_AbilityReleased(FGameplayTag InputTag)
 {
+	if (InputTag.MatchesTagExact(ODGameplayTags::InputTag_Dodge))
+	{
+		Input_DodgeReleased();
+		return;
+	}
+
 	if (IsValid(AbilitySystemComponent))
 	{
 		AbilitySystemComponent->AbilityInputTagReleased(InputTag);
 	}
+}
+
+void AODPlayerCharacter::Input_DodgePressed()
+{
+	bDodgeKeyHeld = true;
+	bSprintStartedThisPress = false;
+
+	// 누르는 순간 항상 회피한다. (캔슬 구간·방향 처리는 ASC의 회피 입력 처리와 같다)
+	if (IsValid(AbilitySystemComponent))
+	{
+		AbilitySystemComponent->AbilityInputTagPressed(ODGameplayTags::InputTag_Dodge);
+		AbilitySystemComponent->AbilityInputTagReleased(ODGameplayTags::InputTag_Dodge);
+	}
+
+	// 그대로 누르고 있으면 회피가 끝나는 대로 달리기로 이어진다.
+	GetWorldTimerManager().SetTimer(SprintHoldTimer, this, &ThisClass::TryStartSprintFromHold, SprintHoldTime, false);
+}
+
+void AODPlayerCharacter::Input_DodgeReleased()
+{
+	if (!bDodgeKeyHeld)
+	{
+		return;
+	}
+
+	bDodgeKeyHeld = false;
+	GetWorldTimerManager().ClearTimer(SprintHoldTimer);
+
+	// 달리는 중이면 끝낸다. (달리기는 키를 떼면 끝나는 어빌리티)
+	if (IsValid(AbilitySystemComponent))
+	{
+		AbilitySystemComponent->AbilityInputTagReleased(ODGameplayTags::InputTag_Sprint);
+	}
+}
+
+void AODPlayerCharacter::TryStartSprintFromHold()
+{
+	if (!bDodgeKeyHeld || bSprintStartedThisPress || !IsValid(AbilitySystemComponent) || IsDead())
+	{
+		return;
+	}
+
+	if (AbilitySystemComponent->TryActivateAbilityByInputTag(ODGameplayTags::InputTag_Sprint))
+	{
+		bSprintStartedThisPress = true;
+		return;
+	}
+
+	// 회피·공격 중이라 지금은 못 달린다. 키를 누르고 있으면 끝나는 대로 달리기 시작한다.
+	GetWorldTimerManager().SetTimer(SprintHoldTimer, this, &ThisClass::TryStartSprintFromHold, SprintRetryInterval, false);
 }
 
 void AODPlayerCharacter::Input_Interact()

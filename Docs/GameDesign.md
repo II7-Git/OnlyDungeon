@@ -77,7 +77,8 @@
 | 약공격 | 좌클릭 | `InputTag.Attack.Light` |
 | 강공격 | 우클릭 | `InputTag.Attack.Heavy` |
 | 방어 (패링·가드) | Left Shift | `InputTag.Defense` |
-| 회피 | Space | `InputTag.Dodge` |
+| 회피 | Space (누르는 순간) | `InputTag.Dodge` |
+| 달리기 | Space 계속 누르기 (회피가 끝난 뒤, 누르는 동안) | `InputTag.Sprint` |
 | 스킬 1 / 스킬 2 | Q / E | `InputTag.Skill.1` / `.2` |
 | 락온 | 마우스 휠 클릭 | `InputTag.LockOn` |
 | 회복 | R | `InputTag.UseItem` |
@@ -90,6 +91,7 @@
     - **락온 중:** 대상을 바라본 채 입력 방향에 맞는 **8방향 구르기** (`CM_Roll_Front/Back/Left/Right/FrontLeft/FrontRight/BackLeft/BackRight`)
     - 모션은 모두 1.17초이고 **1.25배 속도**로 재생합니다. 모션 0.95초 지점(실제 약 0.76초)에서 회피가 끝나 다음 행동이 가능하고(나머지는 0.2초 블렌드), 루트 모션으로 약 3.2m 이동. 경로 `/Game/OnlyDungeon/Animation/Common`
     - **무적:** 회피 시작 즉시 ~ 0.68초 (뛰어드는 동작과 바닥을 구르는 동안 = 모션 0~0.85초. 일어서는 동작은 무적 아님) (2026-11-15 조정)
+- **달리기 (2026-11-19):** 두 모드 공통. Space를 누르면 항상 먼저 구르고, 그대로 누르고 있으면 구르기가 끝나는 즉시 달리기로 이어집니다(이동 속도 500 → 750, 2026-11-19 사용자 결정으로 "떼는 순간 회피"에서 변경). 달리는 동안 실제로 움직이면 스태미나를 초당 12 쓰며(제자리에서는 소모 없음), 소모가 이어지는 동안 자연 회복은 멈춥니다. 스태미나가 바닥나면 걷기로 돌아가고, 다시 달리려면 Space를 다시 눌러야 합니다. 공격·회피·방어·물약·휴식·경직이 시작되면 달리기가 끝나고, 공격 중에 Space를 누르고 있으면 공격이 끝나는 대로 달립니다. 시작 최소 스태미나 5. 모션은 ParagonKwang `Sprint_Fwd`를 리타깃한 `CM_Sprint_Fwd`(한손검·대검 공통).
 
 ---
 
@@ -167,6 +169,8 @@
 | `GA_Attack_Light` | `/Game/OnlyDungeon/AbilitySystem/Abilities/` | `UODGameplayAbility_MeleeCombo` 기반. `AM_OH_LightCombo`(A~D 4타), 1타당 스태미나 10(`GE_Cost_Attack_Light`) |
 | `GA_Dodge` | `/Game/OnlyDungeon/AbilitySystem/Abilities/` | `UODGameplayAbility_Dodge` 기반. 상태 `State.Dodging`, 차단 Dead/Stunned/Dodging |
 | `GE_Cost_Dodge` | `/Game/OnlyDungeon/AbilitySystem/Effects/` | 스태미나 -20 (초안) |
+| `GA_Sprint` | `/Game/OnlyDungeon/AbilitySystem/Abilities/` | `UODGameplayAbility_Sprint` 기반. 속도 750, 초당 스태미나 12, 시작 최소 5 (초안). 상태 `State.Sprinting` |
+| `GE_Sprint_StaminaDrain` | `/Game/OnlyDungeon/AbilitySystem/Effects/` | 즉시 적용, Stamina += SetByCaller `Data.StaminaCost` (달리기 틱마다 음수) |
 | `GA_StaminaRegen` | `/Game/OnlyDungeon/AbilitySystem/Abilities/` | `UODGameplayAbility_StaminaRegen` 기반 패시브 |
 | `GE_Regen_Stamina` | `/Game/OnlyDungeon/AbilitySystem/Effects/` | 무한 지속, 0.1초마다 `StaminaRegenRate × 0.1` 회복 |
 | `AM_Roll_*` 8개 | `/Game/OnlyDungeon/Animation/Common/Montages/` | `CM_Roll_*` 기반 몽타주, `DefaultSlot`, 루트 모션 |
