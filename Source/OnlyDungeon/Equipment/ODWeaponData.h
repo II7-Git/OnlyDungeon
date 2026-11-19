@@ -101,6 +101,21 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace", meta = (ClampMin = "2", ClampMax = "16"))
 	int32 TraceSamples = 4;
 
+	/**
+	 * 보조 손 판정: 양손에 무기를 든 몬스터(양팔 칼날, 쌍철퇴)처럼 왼손 공격도 맞혀야 할 때 켠다.
+	 * 소유자 메시의 OffhandAttachSocket 기준 OffhandTraceStart~End 구간을 같은 반경·지점 수로 함께 쓸어 낸다.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace")
+	bool bTraceOffhand = false;
+
+	/** 보조 손 판정 시작점 (OffhandAttachSocket 기준) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace", meta = (EditCondition = "bTraceOffhand"))
+	FVector OffhandTraceStart = FVector::ZeroVector;
+
+	/** 보조 손 판정 끝점 (OffhandAttachSocket 기준) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace", meta = (EditCondition = "bTraceOffhand"))
+	FVector OffhandTraceEnd = FVector::ZeroVector;
+
 	/** 판정을 아래쪽으로 늘리는 길이. 덩치 큰 적의 휘두르기가 사람 머리 위로 지나가지 않게 한다. (0이면 구 판정) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trace", meta = (ClampMin = "0.0", Units = "cm"))
 	float TraceDownReach = 0.0f;

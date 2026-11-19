@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""게임플레이 배치: 안개벽 재질, 보이지 않는 경계벽, 세이브 포인트 3곳, 구울 45마리, 골렘, 보스 입구, 내비 메시."""
+"""게임플레이 배치: 안개벽 재질, 보이지 않는 경계벽, 세이브 포인트 3곳, 구울 42·사냥꾼 6, 광장 정예 Grux, 골렘, 보스 입구, 내비 메시."""
 import math
 import random
 import sys
@@ -180,17 +180,26 @@ GROUPS = [
     ('Road2', -6.0, 68.0, 4.0, 1, 1, 1),
     ('Plaza', -50.0, 120.0, 21.0, 10, 4, 2),
     ('Road3', 30.0, 151.0, 4.0, 1, 1, 0),
-    ('Graveyard', 60.0, 192.0, 14.0, 4, 2, 3),
-    ('Road4', 76.0, 232.0, 4.0, 1, 1, 1),
+    ('Graveyard', 60.0, 192.0, 14.0, 3, 2, 3),
     ('Forecourt', 4.0, 262.0, 11.0, 2, 1, 0),
 ]
+# 저주받은 사냥꾼(Khaimera) 묶음: (구역, u, v, 반지름, 서기, 순찰) — 세이브 2 이후, Grux 광장에서 25m 넘게 떨어뜨린다(무리 어그로가 정예를 깨우지 않게)
+HUNTERS = [
+    ('Road3', 34.0, 154.0, 3.0, 1, 0),
+    ('Graveyard', 60.0, 192.0, 15.0, 2, 1),
+    ('Forecourt', 0.0, 266.0, 12.0, 1, 1),
+]
+# 역병의 족장(Grux): 광장 가운데, 묘지 쪽(들어오는 방향)을 바라본다
+ARENA_GRUX = (74.0, 236.0)
 
 
 def place_enemies(r):
     rng = random.Random(7)
     ghoul = cls('/Game/OnlyDungeon/Characters/Enemies/BP_ODEnemy_Skeleton')
+    hunter = cls('/Game/OnlyDungeon/Characters/Enemies/BP_ODEnemy_Khaimera')
     total = 0
-    for name, cu, cv, rad, stand, patrol, ambush in GROUPS:
+    groups = [(ghoul, 'Ghoul', 110.0) + g for g in GROUPS] + [(hunter, 'Hunter', 112.0) + h + (0,) for h in HUNTERS]
+    for c, prefix, lift, name, cu, cv, rad, stand, patrol, ambush in groups:
         kinds = [Idle.STAND] * stand + [Idle.PATROL] * patrol + [Idle.AMBUSH] * ambush
         used = []
         for n, kind in enumerate(kinds):
@@ -201,7 +210,7 @@ def place_enemies(r):
                     break
             used.append((u, v))
             x, y = L.to_world(u, v)
-            e = spawn(ghoul, 'GP_Ghoul_%s_%02d' % (name, n), unreal.Vector(x, y, ground(u, v, r) + 110.0), rng.uniform(0, 360), 'Gameplay/Ghouls')
+            e = spawn(c, 'GP_%s_%s_%02d' % (prefix, name, n), unreal.Vector(x, y, ground(u, v, r) + lift), rng.uniform(0, 360), 'Gameplay/' + prefix + 's')
             e.set_editor_property('idle_behavior', kind)
             if kind == Idle.PATROL:
                 pts = []
@@ -267,7 +276,14 @@ def build():
             c.set_material(0, door)
         elif c.get_name() == 'Lintel':
             c.set_material(0, stone)
-    out['ghouls'] = place_enemies(r)
+    out['enemies'] = place_enemies(r)
+    # 광장 정예
+    gu, gv = ARENA_GRUX
+    gx, gy = L.to_world(gu, gv)
+    fx, fy = L.to_world(60.0, 192.0)
+    grux = spawn(cls('/Game/OnlyDungeon/Characters/Enemies/BP_ODEnemy_Grux'), 'GP_Elite_Grux', unreal.Vector(gx, gy, ground(gu, gv, r) + 160.0),
+                 math.degrees(math.atan2(fy - gy, fx - gx)), 'Gameplay')
+    out['grux'] = grux.get_actor_label()
     # 내비 메시
     nv = spawn(unreal.NavMeshBoundsVolume, 'GP_NavBounds', unreal.Vector(13000.0, 14000.0, 300.0))
     nv.set_actor_scale3d(unreal.Vector(256.0, 256.0, 30.0))

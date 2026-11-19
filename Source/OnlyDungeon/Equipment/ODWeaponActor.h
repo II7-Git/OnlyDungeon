@@ -59,6 +59,10 @@ private:
 	float TraceRadius = 8.0f;
 	int32 TraceSamples = 4;
 	float TraceDownReach = 0.0f;
+	bool bTraceOffhand = false;
+	FName OffhandSocket;
+	FVector OffhandTraceStart = FVector::ZeroVector;
+	FVector OffhandTraceEnd = FVector::ZeroVector;
 	float FieldHitRadius = 220.0f;
 	float FieldHitHalfAngle = 60.0f;
 

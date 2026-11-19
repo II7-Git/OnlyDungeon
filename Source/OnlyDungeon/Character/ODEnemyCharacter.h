@@ -117,6 +117,12 @@ public:
 	 */
 	bool ReceiveAlert(AODCharacterBase* Target);
 
+	/** 정예라면 화면 아래 체력 바(보스전)를 시작한다. */
+	void StartEliteEncounter();
+
+	/** 정예 보스전이 진행 중이면 패배(이탈)로 끝낸다. */
+	void EndEliteEncounter();
+
 	/** 대상을 놓고 시작 위치로 돌아가는 중인지 */
 	bool IsReturningHome() const { return bReturningHome; }
 
@@ -161,6 +167,13 @@ protected:
 	/** 시작 위치에서 이 거리 이상 멀어지면 대상을 놓고 돌아간다. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|AI", meta = (ClampMin = "0.0", Units = "cm"))
 	float LeashRange = 2500.0f;
+
+	/**
+	 * 필드 정예: 플레이어를 공격 대상으로 잡는 순간 보스전 서브시스템으로 화면 아래 큰 체력 바를 띄운다.
+	 * 어그로가 풀리면(구역 이탈) 바를 내리고, 처치하면 보스처럼 승리 연출을 한다. 머리 위 이름표는 BP에서 끈다.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|AI")
+	bool bEliteEncounter = false;
 
 	/** 대상을 발견하면 이 거리 안의 동료도 같은 대상을 잡는다. 0이면 알리지 않는다. (보스는 0) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|AI", meta = (ClampMin = "0.0", Units = "cm"))
