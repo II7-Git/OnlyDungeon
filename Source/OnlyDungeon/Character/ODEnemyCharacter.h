@@ -15,6 +15,7 @@ class UNiagaraSystem;
 class UGameplayEffect;
 class UODEnemyCombatComponent;
 class UStateTree;
+class UUserWidget;
 class UWidgetComponent;
 struct FOnAttributeChangeData;
 
@@ -245,6 +246,14 @@ protected:
 	/** 캡슐 꼭대기에서 이름표까지의 높이 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|UI", meta = (Units = "cm"))
 	float NameplateHeightOffset = 35.0f;
+
+	/**
+	 * 이름표 컴포넌트에 위젯 클래스가 지정되지 않았을 때 쓸 기본 이름표 위젯.
+	 * 게임플레이 코드가 UI 클래스를 직접 참조하지 않도록 경로로만 들고 있다. (CLAUDE.md 12-1)
+	 * IODActorBoundWidget을 구현한 위젯이어야 대상 적이 연결된다.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Enemy|UI", meta = (MustImplement = "/Script/OnlyDungeon.ODActorBoundWidget"))
+	TSoftClassPtr<UUserWidget> DefaultNameplateWidgetClass;
 
 private:
 	void SetCombatActive(bool bNewActive);

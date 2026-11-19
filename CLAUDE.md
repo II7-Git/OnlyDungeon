@@ -29,6 +29,12 @@
 
 **질문 방식:** 직면한 과제 요약 -> 선택지(2~3개)와 장단점 -> 추천 방향 제시 후 대기
 
+**설계 선행 (기능 구현·리팩토링 공통):** 바로 구현 코드를 작성하지 않고, 먼저 다음 세 가지를 요약해 승인을 받은 뒤 구현한다. (12장 지침 기준)
+1. 아키텍처 및 데이터 레이아웃 (클래스·컴포넌트 배치, 소유 관계, 데이터가 어떤 컨테이너에 어떻게 놓이는지)
+2. 핵심 인터페이스 초안 (공개 함수·델리게이트·UPROPERTY 시그니처)
+3. 성능 병목과 엣지 케이스 대응 방안 (Hot Path 할당, 탐색 복잡도, 12-4의 상황별 정리)
+- 오타·수치 조정·로그 추가처럼 구조가 바뀌지 않는 작은 수정은 예외로 바로 진행해도 된다.
+
 ---
 
 ## 2. MCP 에디터 조작 규칙 (Unreal MCP)
@@ -183,3 +189,39 @@ C++ 소스 코드(`Source/`)나 `.Build.cs`/`.uproject`를 수정한 후, Git에
   5. **전진하는 공격(StepDistance):** 제자리 모션(특히 공중 공격·서서 휘두르는 모션) 동안 크게 전진하면 발이 고정된 채 미끄러진다. 달리기·점프(다리를 접는) 구간에만 전진시키고, 재생 속도로 보폭 속도와 전진 속도를 맞춘다.
 - **측정:** PIE에서 `Tools/AnimCheck/od_foot_check.py`의 `check()`로 추격·간 보기·전진 공격마다 보폭과 slip(디딤 발 속도 ÷ 몸 속도)을 잰다. 플레이어 조깅(slip 약 0.4)과 비슷해야 하며, 보폭이 거의 0이거나 slip이 0.8 이상이면 위 원인을 찾아 고친다. 수치와 함께 옆에서 찍은 캡처로 다리가 실제로 움직이는지 확인한다.
 
+
+---
+
+## 12. 설계 기본 지침 (아키텍처·성능·안전)
+새 코드와 리팩토링 모두 이 지침을 기본값으로 삼는다. 지침을 어겨야 하는 경우(엔진 API 제약 등)는 이유를 주석으로 남기고 설계 요약(1장)에 적는다.
+
+### 12-1. 의존성 규칙
+- **방향:** `UI` → `Character`/`AbilitySystem`/`AI`/`World` → `Core` 순으로만 의존한다. 게임플레이 코드(`Core`, `Character`, `AbilitySystem`, `AI`, `Equipment`, `World`)는 `UI/` 헤더를 include하지 않는다.
+- **통신:** 하위 계층이 상위 계층(UI·연출)에 알릴 때는 델리게이트(`DECLARE_MULTICAST_DELEGATE_*` / `DECLARE_DYNAMIC_MULTICAST_DELEGATE_*`), GAS Attribute 변경 델리게이트, GameplayCue, GameplayEvent를 쓴다. 위젯은 스스로 구독하고 `NativeDestruct`에서 해제한다.
+- 위젯이 액터를 받아야 하면 `Core/`에 둔 인터페이스로 넘기고, 게임플레이 쪽은 구체 위젯 클래스를 모른다.
+
+### 12-2. 성능·메모리 제약
+- **Hot Path 정의:** Tick, `NotifyTick`, StateTree `Tick`, 반복 타이머(0.5초 이하 주기), 어빌리티의 주기 갱신 함수.
+- **Hot Path 안에서 힙 할당·컨테이너 재할당 금지:**
+  - 매 호출 쓰는 임시 배열은 멤버 스크래치 버퍼로 두고 `Reset()`으로 재사용한다. 크기는 초기화 시점에 `Reserve()`한다.
+  - 크기 상한이 작고 정해진 지역 배열은 `TArray<T, TInlineAllocator<N>>`를 쓴다.
+  - `FString::Printf`/`FText::Format` 같은 문자열 생성은 값이 바뀐 경우에만 한다. (디버그 표시 제외)
+  - `TArray`를 값으로 반환하는 함수를 Hot Path에서 호출하지 않는다. 순회가 필요하면 `ForEach...(TFunctionRef)` 형태나 const 참조 반환을 쓴다.
+- **연속 메모리:** 순회 대상 데이터는 `TArray<FStruct>`(연속 메모리)로 구성한다. 개별 `UObject`를 만들어 순회하지 않는다.
+- **Tick:** 기본 꺼둠(5장). 꼭 필요하면 `bStartWithTickEnabled = false`로 두고 필요한 동안만 `SetComponentTickEnabled`/`SetActorTickEnabled`로 켠다. 짧은 주기 갱신은 타이머를 쓰되 주기는 이름 있는 상수로 둔다.
+- **탐색 복잡도:** 탐색은 O(1) 또는 O(log N) 이내로 한다.
+  - 컴포넌트·서브시스템은 매번 `FindComponentByClass`/`GetSubsystem`으로 찾지 말고 소유 클래스의 게터나 캐시된 `TWeakObjectPtr`를 쓴다.
+  - 특정 종류의 액터 목록은 `TActorIterator`/`GetAllActorsOfClass` 대신 서브시스템에 등록(`Register/Unregister`)해 관리한다.
+  - 키 검색이 잦은 컬렉션은 `TMap`/`TSet`을 쓴다. 단, 원소 수 상한이 작은(약 16개 이하) 배열의 선형 검색은 해시보다 빠르므로 허용한다.
+
+### 12-3. 금지 패턴 (Anti-Patterns)
+- **원시 포인터로 소유권 관리 금지:** 소유는 `UPROPERTY() TObjectPtr`, 비소유는 `TWeakObjectPtr`, 비 UObject는 `TUniquePtr`/`TSharedPtr`. `new`/`delete` 직접 사용 금지.
+- **매직 넘버 하드코딩 금지:** 튜닝 값은 `UPROPERTY(EditDefaultsOnly)` 또는 DataAsset으로, 고정 상수는 파일 상단 `namespace` 안의 `constexpr`로 이름을 붙인다. (0, 1, 0.5 같은 수학 상수와 `KINDA_SMALL_NUMBER` 류는 예외)
+- **존재하지 않는 엔진 API 추측 작성 금지:** 확실하지 않은 API는 엔진 소스(`Engine/Source`)나 기존 프로젝트 코드에서 시그니처를 확인한 뒤 쓴다. 확인할 수 없으면 사용자에게 알린다.
+- 문자열 `FName`으로 태그·소켓·본을 매번 생성하지 않는다. 태그는 Native Tag(6장), 소켓·본 이름은 `UPROPERTY` 또는 `static const FName`.
+
+### 12-4. 반드시 처리할 엣지 케이스
+- **스킬 시전 중 피격·사망:** 사망 시 `Ability.Action` 계열 어빌리티를 취소하고, 각 어빌리티의 `EndAbility`는 취소(`bWasCancelled`) 경로에서도 타이머·스폰한 컴포넌트·이동 설정·부여한 태그를 모두 원상복구한다. 피격 경직(`State.Stunned`)이 행동을 끊는 경우도 같다.
+- **중복 실행 방지:** 같은 요청이 연달아 들어와도 한 번만 처리한다. 어빌리티는 `ActivationBlockedTags`/`ActivationOwnedTags`, 일반 로직은 상태 태그나 진행 중 플래그로 재진입을 막는다. 타이머는 재설정 전에 기존 핸들을 정리한다.
+- **Null/Invalid 대상 방어:** 타이머·델리게이트 콜백, 지연 실행 람다는 실행 시점에 대상을 `IsValid()`/`TWeakObjectPtr::Get()`으로 다시 검증한다. 람다는 `CreateWeakLambda`/`CreateUObject`로 묶는다.
+- **수명 정리:** `EndPlay`/`NativeDestruct`/`Deinitialize`에서 타이머를 지우고 바인딩한 델리게이트를 해제한다.

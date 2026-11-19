@@ -54,6 +54,7 @@ namespace ODHUD
 	constexpr float LagTickInterval = 1.0f / 30.0f;
 	constexpr float DebugTickInterval = 0.1f;
 	constexpr float LockOnMarkerInterval = 1.0f / 60.0f;
+	constexpr float BannerTickInterval = 0.03f;
 
 	FSlateFontInfo Font(int32 Size)
 	{
@@ -512,7 +513,7 @@ void UODHUDWidget::ShowBanner(UTextBlock* Banner, double& OutStartTime, float De
 	Banner->SetVisibility(ESlateVisibility::HitTestInvisible);
 	if (!World->GetTimerManager().IsTimerActive(BannerTimer))
 	{
-		World->GetTimerManager().SetTimer(BannerTimer, this, &ThisClass::UpdateBanners, 0.03f, true);
+		World->GetTimerManager().SetTimer(BannerTimer, this, &ThisClass::UpdateBanners, ODHUD::BannerTickInterval, true);
 	}
 }
 

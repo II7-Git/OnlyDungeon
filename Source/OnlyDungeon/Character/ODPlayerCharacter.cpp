@@ -28,6 +28,12 @@
 #include "Core/ODGameMode.h"
 #include "TimerManager.h"
 
+namespace
+{
+	/** 행동 직전에 넣은 이동 입력을 이 시간 동안 기억해 회피·공격 방향으로 쓴다. */
+	constexpr double MoveInputBufferTime = 0.2;
+}
+
 AODPlayerCharacter::AODPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -399,7 +405,7 @@ void AODPlayerCharacter::Input_Debug_Reset()
 FVector AODPlayerCharacter::GetDesiredMoveDirection() const
 {
 	const UWorld* World = GetWorld();
-	if (World && BufferedMoveTime >= 0.0 && World->GetTimeSeconds() - BufferedMoveTime <= 0.2)
+	if (World && BufferedMoveTime >= 0.0 && World->GetTimeSeconds() - BufferedMoveTime <= MoveInputBufferTime)
 	{
 		return BufferedMoveDirection;
 	}

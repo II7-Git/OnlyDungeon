@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "GameplayEffectTypes.h"
+#include "Core/ODActorBoundWidget.h"
 #include "ODEnemyNameplateWidget.generated.h"
 
 class AODCharacterBase;
@@ -16,18 +17,22 @@ class UTextBlock;
 /**
  * 일반 몬스터 머리 위에 뜨는 이름표 (이름 + 작은 체력 바).
  * 적 캐릭터의 위젯 컴포넌트(화면 공간)가 이 위젯을 띄우고, 보일지 말지는 적 캐릭터가 정한다. (AODEnemyCharacter::RefreshNameplate)
+ * 적 캐릭터는 이 클래스를 모르고 IODActorBoundWidget으로만 대상을 넘긴다. (게임플레이 → UI 의존 방지)
  * 보스는 이름표 대신 화면 하단 보스 체력 바를 쓴다. (UODHUDWidget)
  * 체력 변경 이벤트로만 갱신한다. (Tick 사용 안 함)
  * BP로 상속해 디자이너에 같은 이름의 위젯을 배치하면 그것을 쓰고, 비어 있으면 C++이 기본 레이아웃을 만든다.
  */
 UCLASS()
-class ONLYDUNGEON_API UODEnemyNameplateWidget : public UUserWidget
+class ONLYDUNGEON_API UODEnemyNameplateWidget : public UUserWidget, public IODActorBoundWidget
 {
 	GENERATED_BODY()
 
 public:
 	/** 표시할 적을 정한다. (이름 설정, 체력 이벤트 연결) */
 	void SetCharacter(AODCharacterBase* InCharacter);
+
+	//~ IODActorBoundWidget
+	virtual void BindToActor(AActor* InActor) override;
 
 protected:
 	virtual bool Initialize() override;

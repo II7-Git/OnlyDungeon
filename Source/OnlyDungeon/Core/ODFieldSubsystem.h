@@ -32,14 +32,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "OD|Field")
 	void ResetAllEnemies();
 
-	/** 등록된 적 (무효 항목 제외) */
+	/** 등록된 적 (무효 항목 제외). 새 배열을 만들어 반환하므로 BP·이벤트용이며, C++ 반복 처리는 ForEachEnemy를 쓴다. */
 	UFUNCTION(BlueprintCallable, Category = "OD|Field")
 	TArray<AODEnemyCharacter*> GetEnemies() const;
+
+	/** 등록된 유효한 적마다 Func를 부른다. 임시 배열을 만들지 않는다. (순회 중 등록·해제 금지) */
+	void ForEachEnemy(TFunctionRef<void(AODEnemyCharacter&)> Func) const;
 
 	/** Source 주변(Radius 안)의 다른 적에게 같은 대상을 알린다. (한 마리가 발견하면 무리가 함께 달려온다) */
 	void AlertNearbyEnemies(AODEnemyCharacter* Source, AODCharacterBase* Target, float Radius);
 
-	/** 공격 순번을 새로 얻을 수 있는지 (이미 가진 적은 참) */
+	/** 공격 순번을 새로 얻을 수 있는지 (이미 가진 적은 참). AI Tick에서 불리므로 상태를 바꾸지 않는 조회만 한다. */
 	bool CanAcquireAttackToken(const AODEnemyCharacter* Enemy) const;
 
 	/** 공격 순번을 얻는다. 동시에 공격하는 적이 MaxAttackTokens에 이미 찼으면 실패 */
@@ -54,11 +57,14 @@ protected:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
 private:
-	/** 죽었거나 사라진 순번 보유자를 정리한다. */
-	void PruneAttackTokens() const;
+	/** 죽었거나 사라진 순번 보유자를 정리한다. (순번 획득·적 해제 같은 이벤트 시점에만 호출) */
+	void PruneAttackTokens();
+
+	/** 순번을 실제로 쥐고 있는(살아 있는) 적 수 */
+	int32 CountActiveTokenHolders() const;
 
 	TArray<TWeakObjectPtr<AODEnemyCharacter>> Enemies;
 
-	/** 지금 공격 순번을 가진 적 */
-	mutable TArray<TWeakObjectPtr<AODEnemyCharacter>> AttackTokenHolders;
+	/** 지금 공격 순번을 가진 적. 상한이 MaxAttackTokens(2~3)라 선형 검색이 가장 싸다. */
+	TArray<TWeakObjectPtr<AODEnemyCharacter>> AttackTokenHolders;
 };

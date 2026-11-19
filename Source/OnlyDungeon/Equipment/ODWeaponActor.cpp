@@ -23,6 +23,19 @@ namespace
 		TEXT("OD.Debug.WeaponTrace"),
 		false,
 		TEXT("무기 판정 스윕을 화면에 표시한다. (0: 끔, 1: 켬)"));
+
+	/** 스윕 한 번에 겹칠 수 있는 대상 수 예상치 (HitBuffer 초기 용량) */
+	constexpr int32 ExpectedHitsPerSweep = 8;
+
+	/** 필드 범위 판정에서 이 거리 안이면 몸이 겹친 것으로 보고 각도와 무관하게 맞힌다. */
+	constexpr double AreaHitOverlapDistance = 60.0;
+
+	/** 디버그 표시 유지 시간과 크기 */
+	constexpr float DebugDrawDuration = 1.0f;
+	constexpr float DebugLineThickness = 1.0f;
+	constexpr float DebugAreaLineThickness = 1.5f;
+	constexpr float DebugAreaHitSphereRadius = 20.0f;
+	constexpr int32 DebugSphereSegments = 8;
 }
 
 AODWeaponActor::AODWeaponActor()
@@ -55,6 +68,12 @@ void AODWeaponActor::InitializeFromData(const UODWeaponData* InWeaponData)
 	OffhandTraceEnd = InWeaponData->OffhandTraceEnd;
 	FieldHitRadius = InWeaponData->FieldHitRadius;
 	FieldHitHalfAngle = InWeaponData->FieldHitHalfAngle;
+
+	// 판정 버퍼를 무기 설정에 맞춰 미리 잡아 두어 휘두르는 동안 재할당이 없게 한다.
+	const int32 PointCount = bTraceOffhand ? TraceSamples * 2 : TraceSamples;
+	PreviousPoints.Reserve(PointCount);
+	CurrentPoints.Reserve(PointCount);
+	HitBuffer.Reserve(ExpectedHitsPerSweep);
 }
 
 void AODWeaponActor::BeginTrace()
@@ -72,7 +91,6 @@ void AODWeaponActor::TickTrace()
 		return;
 	}
 
-	TArray<FVector> CurrentPoints;
 	GetTracePoints(CurrentPoints);
 
 	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(ODWeaponTrace), false);
@@ -85,18 +103,17 @@ void AODWeaponActor::TickTrace()
 	const FVector ShapeOffset(0.0, 0.0, -TraceDownReach * 0.5f);
 	const bool bDrawDebug = CVarDrawWeaponTrace.GetValueOnGameThread();
 
-	TArray<FHitResult> Hits;
 	for (int32 Index = 0; Index < CurrentPoints.Num() && PreviousPoints.IsValidIndex(Index); ++Index)
 	{
-		Hits.Reset();
-		World->SweepMultiByObjectType(Hits, PreviousPoints[Index] + ShapeOffset, CurrentPoints[Index] + ShapeOffset, FQuat::Identity, ObjectParams, Shape, QueryParams);
+		HitBuffer.Reset();
+		World->SweepMultiByObjectType(HitBuffer, PreviousPoints[Index] + ShapeOffset, CurrentPoints[Index] + ShapeOffset, FQuat::Identity, ObjectParams, Shape, QueryParams);
 
 		if (bDrawDebug)
 		{
-			DrawDebugLine(World, PreviousPoints[Index], CurrentPoints[Index], Hits.IsEmpty() ? FColor::Green : FColor::Red, false, 1.0f, 0, 1.0f);
+			DrawDebugLine(World, PreviousPoints[Index], CurrentPoints[Index], HitBuffer.IsEmpty() ? FColor::Green : FColor::Red, false, DebugDrawDuration, 0, DebugLineThickness);
 		}
 
-		for (const FHitResult& Hit : Hits)
+		for (const FHitResult& Hit : HitBuffer)
 		{
 			AActor* HitActor = Hit.GetActor();
 			if (!IsValid(HitActor) || HitActors.Contains(HitActor))
@@ -114,18 +131,21 @@ void AODWeaponActor::TickTrace()
 
 			if (bDrawDebug)
 			{
-				DrawDebugSphere(World, Hit.ImpactPoint, TraceRadius, 8, FColor::Red, false, 1.0f);
+				DrawDebugSphere(World, Hit.ImpactPoint, TraceRadius, DebugSphereSegments, FColor::Red, false, DebugDrawDuration);
 			}
 		}
 	}
 
-	PreviousPoints = MoveTemp(CurrentPoints);
+	// 버퍼를 맞바꿔 다음 프레임의 '이전 위치'로 쓴다. (복사·할당 없음)
+	Swap(PreviousPoints, CurrentPoints);
 }
 
 void AODWeaponActor::EndTrace()
 {
 	bTracing = false;
 	PreviousPoints.Reset();
+	CurrentPoints.Reset();
+	HitBuffer.Reset();
 	HitActors.Reset();
 }
 
@@ -154,10 +174,10 @@ void AODWeaponActor::PerformAreaHit()
 	{
 		const FVector Left = Forward.RotateAngleAxis(-FieldHitHalfAngle, FVector::UpVector);
 		const FVector Right = Forward.RotateAngleAxis(FieldHitHalfAngle, FVector::UpVector);
-		DrawDebugLine(World, Origin, Origin + Left * FieldHitRadius, FColor::Green, false, 1.0f, 0, 1.5f);
-		DrawDebugLine(World, Origin, Origin + Right * FieldHitRadius, FColor::Green, false, 1.0f, 0, 1.5f);
-		DrawDebugLine(World, Origin + Left * FieldHitRadius, Origin + Forward * FieldHitRadius, FColor::Green, false, 1.0f, 0, 1.5f);
-		DrawDebugLine(World, Origin + Forward * FieldHitRadius, Origin + Right * FieldHitRadius, FColor::Green, false, 1.0f, 0, 1.5f);
+		DrawDebugLine(World, Origin, Origin + Left * FieldHitRadius, FColor::Green, false, DebugDrawDuration, 0, DebugAreaLineThickness);
+		DrawDebugLine(World, Origin, Origin + Right * FieldHitRadius, FColor::Green, false, DebugDrawDuration, 0, DebugAreaLineThickness);
+		DrawDebugLine(World, Origin + Left * FieldHitRadius, Origin + Forward * FieldHitRadius, FColor::Green, false, DebugDrawDuration, 0, DebugAreaLineThickness);
+		DrawDebugLine(World, Origin + Forward * FieldHitRadius, Origin + Right * FieldHitRadius, FColor::Green, false, DebugDrawDuration, 0, DebugAreaLineThickness);
 	}
 
 	TArray<AActor*, TInlineAllocator<16>> Processed;
@@ -179,7 +199,7 @@ void AODWeaponActor::PerformAreaHit()
 		ToTarget.Z = 0.0;
 		const double Distance = ToTarget.Size();
 		const FVector Direction = Distance > UE_KINDA_SMALL_NUMBER ? ToTarget / Distance : Forward;
-		if (Distance > 60.0 && FVector::DotProduct(Forward, Direction) < MinCos)
+		if (Distance > AreaHitOverlapDistance && FVector::DotProduct(Forward, Direction) < MinCos)
 		{
 			continue;
 		}
@@ -193,7 +213,7 @@ void AODWeaponActor::PerformAreaHit()
 
 		if (bDrawDebug)
 		{
-			DrawDebugSphere(World, Hit.ImpactPoint, 20.0f, 8, FColor::Red, false, 1.0f);
+			DrawDebugSphere(World, Hit.ImpactPoint, DebugAreaHitSphereRadius, DebugSphereSegments, FColor::Red, false, DebugDrawDuration);
 		}
 	}
 }
