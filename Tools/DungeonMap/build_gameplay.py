@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """게임플레이 배치: 안개벽 재질, 보이지 않는 경계벽, 세이브 포인트 3곳, 구울 42·사냥꾼 6, 광장 정예 Grux, 골렘, 보스 입구, 내비 메시."""
 import math
 import random
@@ -110,16 +110,21 @@ def spawn(c, label, loc, yaw=0.0, folder='Gameplay'):
     return a
 
 
+WALL_MARGIN = 1.0  # m, 걸을 수 있는 칸 바깥으로 벽을 밀어내는 거리
+
+
 def build_boundary(r):
     """걸을 수 있는 영역의 외곽을 따라 보이지 않는 벽 메시 생성"""
     path = ENV + 'SM_OD_BoundaryWall'
     if eal.does_asset_exist(path):
         eal.delete_asset(path)
+    # 길 가장자리에서 1m 바깥에 세운다. 벽을 직선 토막으로 이으면 급커브에서 길 안쪽을 가로질러 폭이 좁아지기 때문
+    inside = bytearray(1 if r.d[k] <= WALL_MARGIN else 0 for k in range(L.NU * L.NV))
     edge = set()
     for j in range(1, L.NV - 1):
         for i in range(1, L.NU - 1):
             k = i + j * L.NU
-            if r.walk[k] and not (r.walk[k - 1] and r.walk[k + 1] and r.walk[k - L.NU] and r.walk[k + L.NU]):
+            if inside[k] and not (inside[k - 1] and inside[k + 1] and inside[k - L.NU] and inside[k + L.NU]):
                 edge.add((i, j))
     chains = []
     while edge:
@@ -141,7 +146,7 @@ def build_boundary(r):
     for chain in chains:
         if len(chain) < 4:
             continue
-        pts = chain[::3] + [chain[0]] if math.dist(chain[0], chain[-1]) < 6 else chain[::3] + [chain[-1]]
+        pts = chain[::2] + [chain[0]] if math.dist(chain[0], chain[-1]) < 6 else chain[::2] + [chain[-1]]
         for a, b in zip(pts, pts[1:]):
             ua, va, ub, vb = a[0] + L.U0, a[1] + L.V0, b[0] + L.U0, b[1] + L.V0
             mu, mv = (ua + ub) / 2.0, (va + vb) / 2.0
@@ -171,26 +176,29 @@ def build_boundary(r):
     return n, len(chains)
 
 
-# 세이브 포인트: 이름, u, v, 부활 시 바라볼 화면 방향(요)
-SAVES = [('Save_Start', -56.0, 7.0, 45.0), ('Save_AfterPlaza', -8.0, 153.0, 45.0), ('Save_BossDoor', -10.0, 274.0, 45.0)]
-# 구울 묶음: (구역, u, v, 반지름, 서기, 순찰, 매복)
+# 세이브 포인트(쉼터): 이름, u, v, 부활 시 바라볼 화면 방향(요). 2026-11-19 새 코스: 시작 공터·사당 광장 북쪽·보스문 앞
+SAVES = [('Save_Start', -18.0, 60.0, 45.0), ('Save_Shrine', -12.0, 238.0, 45.0), ('Save_BossDoor', -4.0, 286.0, 45.0)]
+# 구울 묶음: (구역, u, v, 반지름, 서기, 순찰, 매복). 광장 대신 길 모퉁이·좁은 길에 둔다
 GROUPS = [
-    ('Road1', -14.0, 13.0, 4.0, 2, 1, 0),
-    ('Glade', 10.0, 36.0, 14.0, 4, 2, 1),
-    ('Road2', -6.0, 68.0, 4.0, 1, 1, 1),
-    ('Plaza', -50.0, 120.0, 21.0, 10, 4, 2),
-    ('Road3', 30.0, 151.0, 4.0, 1, 1, 0),
-    ('Graveyard', 60.0, 192.0, 14.0, 3, 2, 3),
-    ('Forecourt', 4.0, 262.0, 11.0, 2, 1, 0),
+    ('Bend1', -48.0, 90.0, 4.0, 2, 0, 0),       # A 첫 굽이 넓은 곳
+    ('Corner1', -10.0, 128.0, 4.0, 1, 0, 1),    # A 첫 코너
+    ('Narrow1', -22.0, 150.0, 2.5, 0, 2, 0),    # A 좁은 길
+    ('EastRoad', 12.0, 186.0, 5.0, 2, 1, 0),    # B 동쪽 큰길
+    ('WestPath', -36.0, 186.0, 2.5, 0, 0, 2),   # C 서쪽 샛길 매복
+    ('Hollow', -58.0, 206.0, 4.0, 1, 0, 0),     # 막다른 공터 1
+    ('Shrine', -12.0, 226.0, 8.0, 3, 1, 0),     # 무너진 사당 광장
+    ('Corner2', 24.0, 224.0, 3.0, 1, 0, 1),     # E 코너
+    ('GateRoad', 14.0, 268.0, 2.5, 1, 0, 0),    # G 보스문 전 길
 ]
-# 저주받은 사냥꾼(Khaimera) 묶음: (구역, u, v, 반지름, 서기, 순찰) — 세이브 2 이후, Grux 광장에서 25m 넘게 떨어뜨린다(무리 어그로가 정예를 깨우지 않게)
+# 저주받은 사냥꾼(Khaimera) 묶음: (구역, u, v, 반지름, 서기, 순찰) — 족장 광장에서 25m 넘게 떨어뜨린다(무리 어그로가 정예를 깨우지 않게)
 HUNTERS = [
-    ('Road3', 34.0, 154.0, 3.0, 1, 0),
-    ('Graveyard', 60.0, 192.0, 15.0, 2, 1),
-    ('Forecourt', 0.0, 266.0, 12.0, 1, 1),
+    ('Hollow', -58.0, 206.0, 4.0, 1, 0),
+    ('Thicket', 48.0, 204.0, 4.0, 2, 0),
+    ('GateRoad', 12.0, 270.0, 2.5, 1, 0),
 ]
-# 역병의 족장(Grux): 광장 가운데, 묘지 쪽(들어오는 방향)을 바라본다
-ARENA_GRUX = (74.0, 236.0)
+# 역병의 족장(Grux): 광장 가운데, 들어오는 길(E) 쪽을 바라본다
+ARENA_GRUX = (40.0, 254.0)
+GRUX_FACE = (30.0, 232.0)
 
 
 def place_enemies(r):
@@ -237,8 +245,8 @@ def build():
     r = L.Raster()
     out = {'boundary': build_boundary(r)}
     # 시작 지점
-    sx, sy = L.to_world(-52.0, -5.0)
-    spawn(unreal.PlayerStart, 'GP_PlayerStart', unreal.Vector(sx, sy, ground(-52.0, -5.0, r) + 110.0), 45.0)
+    sx, sy = L.to_world(-10.0, 66.0)
+    spawn(unreal.PlayerStart, 'GP_PlayerStart', unreal.Vector(sx, sy, ground(-10.0, 66.0, r) + 110.0), 45.0)
     # 세이브 포인트
     rp = cls('/Game/OnlyDungeon/World/BP_ODRespawnPoint')
     pit = unreal.load_asset('/Game/Dungeon/Meshes/Props/SM_Charcoal_Pit')
@@ -280,7 +288,7 @@ def build():
     # 광장 정예
     gu, gv = ARENA_GRUX
     gx, gy = L.to_world(gu, gv)
-    fx, fy = L.to_world(60.0, 192.0)
+    fx, fy = L.to_world(*GRUX_FACE)
     grux = spawn(cls('/Game/OnlyDungeon/Characters/Enemies/BP_ODEnemy_Grux'), 'GP_Elite_Grux', unreal.Vector(gx, gy, ground(gu, gv, r) + 160.0),
                  math.degrees(math.atan2(fy - gy, fx - gx)), 'Gameplay')
     out['grux'] = grux.get_actor_label()

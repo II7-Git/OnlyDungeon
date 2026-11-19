@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """조명·분위기: 해 질 녘의 차가운 숲, 횃불과 천창 빛줄기가 있는 돔 내부, 황폐한 지면 재질."""
 import math
 import sys
@@ -197,3 +197,42 @@ def build():
         pc.set_editor_property('cast_shadows', i % 4 == 1)
     unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
     return sum(1 for a in eas.get_all_level_actors() if a.get_actor_label().startswith('LT_'))
+
+
+# ---- 2026-11-20 숲길 분위기 보강 (기존 값은 build()에 남겨 둔다) ----
+FOREST_FLOOR_GAIN = 0.30   # 숲 바닥 밝기 (기존 0.46). 낮출수록 길과 대비가 커진다
+PATH_TINT = (2.6, 1.9, 1.25)  # 길 흙색 (기존 2.3, 1.75, 1.2)
+SUN_PITCH = -40.0          # 기존 -24: 낮은 해가 나무 그림자 줄무늬로 길을 덮어 길이 안 읽혔다
+SUN_INTENSITY = 6.0        # 기존 9.0
+FOG_DENSITY = 0.045        # 기존 0.03
+SKY_INTENSITY = 6.5        # 기존 4.5: 그림자 속을 밝혀 나무 그림자 줄무늬의 대비를 줄인다
+FOG_COLOR = (0.11, 0.13, 0.12)  # 기존 (0.10, 0.12, 0.15): 푸른 기를 빼고 회녹색 안개로
+
+
+def forest_mood():
+    """재질·조명을 다시 만들지 않고 값만 바꾼다 (이전 세션에서 손본 다른 설정을 지키기 위해)"""
+    out = {}
+    m = unreal.load_asset(MAT)
+    for x in MEL.get_material_expressions(m):
+        if isinstance(x, unreal.MaterialExpressionMultiply) and abs(x.get_editor_property('const_b') - 0.46) < 1e-3 \
+                or isinstance(x, unreal.MaterialExpressionMultiply) and abs(x.get_editor_property('const_b') - FOREST_FLOOR_GAIN) < 1e-3:
+            x.set_editor_property('const_b', FOREST_FLOOR_GAIN)
+            out['floor'] = FOREST_FLOOR_GAIN
+        if isinstance(x, unreal.MaterialExpressionConstant3Vector):
+            c = x.get_editor_property('constant')
+            if c.r > 1.5:   # 길 흙색 상수 (값이 1을 넘는 유일한 색)
+                x.set_editor_property('constant', unreal.LinearColor(*PATH_TINT, 1.0))
+                out['path'] = PATH_TINT
+    MEL.recompile_material(m)
+    eal.save_loaded_asset(m, False)
+    sun = get('Sun')
+    r = sun.get_actor_rotation()
+    sun.set_actor_rotation(unreal.Rotator(pitch=SUN_PITCH, yaw=r.yaw, roll=0.0), False)
+    sun.light_component.set_editor_property('intensity', SUN_INTENSITY)
+    get('SkyLight').light_component.set_editor_property('intensity', SKY_INTENSITY)
+    fc = get('HeightFog').component
+    fc.set_editor_property('fog_density', FOG_DENSITY)
+    fc.set_editor_property('fog_inscattering_luminance', unreal.LinearColor(*FOG_COLOR, 1.0))
+    unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
+    out['sun'] = (SUN_PITCH, SUN_INTENSITY)
+    return out
