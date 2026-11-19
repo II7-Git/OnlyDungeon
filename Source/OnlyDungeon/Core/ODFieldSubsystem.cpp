@@ -21,6 +21,8 @@ void UODFieldSubsystem::RegisterEnemy(AODEnemyCharacter* Enemy)
 void UODFieldSubsystem::UnregisterEnemy(AODEnemyCharacter* Enemy)
 {
 	Enemies.Remove(Enemy);
+	AttackTokenHolders.Remove(Enemy);
+	PruneAttackTokens();
 }
 
 void UODFieldSubsystem::ResetAllEnemies()
@@ -45,20 +47,21 @@ void UODFieldSubsystem::AlertNearbyEnemies(AODEnemyCharacter* Source, AODCharact
 
 	int32 Alerted = 0;
 	const FVector Origin = Source->GetActorLocation();
-	for (AODEnemyCharacter* Enemy : GetEnemies())
+	const double RadiusSquared = FMath::Square(Radius);
+	ForEachEnemy([&](AODEnemyCharacter& Enemy)
 	{
-		if (Enemy != Source && FVector::DistSquared(Origin, Enemy->GetActorLocation()) <= FMath::Square(Radius) && Enemy->ReceiveAlert(Target))
+		if (&Enemy != Source && FVector::DistSquared(Origin, Enemy.GetActorLocation()) <= RadiusSquared && Enemy.ReceiveAlert(Target))
 		{
 			++Alerted;
 		}
-	}
+	});
 	if (Alerted > 0)
 	{
 		UE_LOG(LogODAI, Log, TEXT("%s 발견 → 주변 %d마리 함께 어그로"), *GetNameSafe(Source), Alerted);
 	}
 }
 
-void UODFieldSubsystem::PruneAttackTokens() const
+void UODFieldSubsystem::PruneAttackTokens()
 {
 	AttackTokenHolders.RemoveAll([](const TWeakObjectPtr<AODEnemyCharacter>& Holder)
 	{
@@ -67,15 +70,33 @@ void UODFieldSubsystem::PruneAttackTokens() const
 	});
 }
 
+int32 UODFieldSubsystem::CountActiveTokenHolders() const
+{
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AODEnemyCharacter>& Holder : AttackTokenHolders)
+	{
+		if (const AODEnemyCharacter* HolderEnemy = Holder.Get(); IsValid(HolderEnemy) && !HolderEnemy->IsDead())
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
 bool UODFieldSubsystem::CanAcquireAttackToken(const AODEnemyCharacter* Enemy) const
 {
-	PruneAttackTokens();
-	return AttackTokenHolders.Contains(Enemy) || AttackTokenHolders.Num() < MaxAttackTokens;
+	// 사망·EndPlay 시 순번은 반납되지만, 반납이 누락돼도 죽은 보유자는 세지 않아 순번이 막히지 않는다.
+	return AttackTokenHolders.Contains(Enemy) || CountActiveTokenHolders() < MaxAttackTokens;
 }
 
 bool UODFieldSubsystem::AcquireAttackToken(AODEnemyCharacter* Enemy)
 {
-	if (!IsValid(Enemy) || !CanAcquireAttackToken(Enemy))
+	if (!IsValid(Enemy))
+	{
+		return false;
+	}
+	PruneAttackTokens();
+	if (!CanAcquireAttackToken(Enemy))
 	{
 		return false;
 	}
@@ -100,4 +121,15 @@ TArray<AODEnemyCharacter*> UODFieldSubsystem::GetEnemies() const
 		}
 	}
 	return Result;
+}
+
+void UODFieldSubsystem::ForEachEnemy(TFunctionRef<void(AODEnemyCharacter&)> Func) const
+{
+	for (const TWeakObjectPtr<AODEnemyCharacter>& WeakEnemy : Enemies)
+	{
+		if (AODEnemyCharacter* Enemy = WeakEnemy.Get(); IsValid(Enemy))
+		{
+			Func(*Enemy);
+		}
+	}
 }
