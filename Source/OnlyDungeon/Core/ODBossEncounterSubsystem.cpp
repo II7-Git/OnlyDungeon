@@ -66,7 +66,8 @@ void UODBossEncounterSubsystem::EndEncounter(bool bVictory)
 			continue;
 		}
 		Boss->OnDeath.RemoveDynamic(this, &ThisClass::HandleBossDeath);
-		if (!bVictory)
+		// 입구가 있는 보스는 다시 입장할 때까지 대기. 입구 없는 필드 정예는 그대로 필드 규칙(귀환·초기화)을 따른다.
+		if (!bVictory && Entrance.IsValid())
 		{
 			Boss->DeactivateCombat();
 		}

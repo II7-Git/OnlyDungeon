@@ -5,7 +5,9 @@
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "GameFramework/Character.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
 #include "DrawDebugHelpers.h"
@@ -47,6 +49,10 @@ void AODWeaponActor::InitializeFromData(const UODWeaponData* InWeaponData)
 	TraceRadius = InWeaponData->TraceRadius;
 	TraceSamples = FMath::Max(InWeaponData->TraceSamples, 2);
 	TraceDownReach = InWeaponData->TraceDownReach;
+	bTraceOffhand = InWeaponData->bTraceOffhand;
+	OffhandSocket = InWeaponData->OffhandAttachSocket;
+	OffhandTraceStart = InWeaponData->OffhandTraceStart;
+	OffhandTraceEnd = InWeaponData->OffhandTraceEnd;
 	FieldHitRadius = InWeaponData->FieldHitRadius;
 	FieldHitHalfAngle = InWeaponData->FieldHitHalfAngle;
 }
@@ -194,12 +200,28 @@ void AODWeaponActor::PerformAreaHit()
 
 void AODWeaponActor::GetTracePoints(TArray<FVector>& OutPoints) const
 {
-	OutPoints.Reset(TraceSamples);
+	OutPoints.Reset(bTraceOffhand ? TraceSamples * 2 : TraceSamples);
 	const FTransform& MeshTransform = MeshComponent->GetComponentTransform();
 	for (int32 Index = 0; Index < TraceSamples; ++Index)
 	{
 		const float Alpha = static_cast<float>(Index) / static_cast<float>(TraceSamples - 1);
 		OutPoints.Emplace(MeshTransform.TransformPosition(FMath::Lerp(TraceStart, TraceEnd, Alpha)));
+	}
+
+	// 보조 손: 소유자 메시 소켓 기준 (지점 순서가 매 프레임 같아야 이전 위치와 짝지어 쓸어 낼 수 있다)
+	if (bTraceOffhand)
+	{
+		const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+		const USkeletalMeshComponent* OwnerMesh = IsValid(OwnerCharacter) ? OwnerCharacter->GetMesh() : nullptr;
+		if (IsValid(OwnerMesh))
+		{
+			const FTransform SocketTransform = OwnerMesh->GetSocketTransform(OffhandSocket);
+			for (int32 Index = 0; Index < TraceSamples; ++Index)
+			{
+				const float Alpha = static_cast<float>(Index) / static_cast<float>(TraceSamples - 1);
+				OutPoints.Emplace(SocketTransform.TransformPosition(FMath::Lerp(OffhandTraceStart, OffhandTraceEnd, Alpha)));
+			}
+		}
 	}
 }
 

@@ -20,6 +20,7 @@
 #include "Camera/CameraShakeBase.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODFieldSubsystem.h"
+#include "Core/ODBossEncounterSubsystem.h"
 #include "Core/ODLogChannels.h"
 #include "Engine/World.h"
 
@@ -287,6 +288,7 @@ AActor* AODEnemyCharacter::UpdateCombatTarget()
 		&& FVector::Dist2D(PlayerCharacter->GetActorLocation(), GetSpawnLocation()) <= LeashRange)
 	{
 		CombatTarget = PlayerCharacter;
+		StartEliteEncounter();
 		// 무리 어그로: 주변 동료도 함께 달려온다.
 		if (AllyAlertRadius > 0.0f)
 		{
@@ -311,12 +313,41 @@ bool AODEnemyCharacter::ReceiveAlert(AODCharacterBase* Target)
 		return false;
 	}
 	CombatTarget = Target;
+	StartEliteEncounter();
 	return true;
+}
+
+void AODEnemyCharacter::StartEliteEncounter()
+{
+	if (!bEliteEncounter)
+	{
+		return;
+	}
+	if (UODBossEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<UODBossEncounterSubsystem>() : nullptr;
+		Encounter && (!Encounter->IsEncounterActive() || Encounter->GetCurrentBoss() != this))
+	{
+		// 입구가 없는 보스전: 시작 시 이미 활성인 이 적을 다시 깨우기만 하고, 패배·이탈로 끝나도 대기 상태로 만들지 않는다.
+		Encounter->StartEncounter({ this }, nullptr);
+	}
+}
+
+void AODEnemyCharacter::EndEliteEncounter()
+{
+	if (!bEliteEncounter)
+	{
+		return;
+	}
+	if (UODBossEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<UODBossEncounterSubsystem>() : nullptr;
+		Encounter && Encounter->IsEncounterActive() && Encounter->GetCurrentBoss() == this)
+	{
+		Encounter->EndEncounter(false);
+	}
 }
 
 void AODEnemyCharacter::Disengage()
 {
 	CombatTarget.Reset();
+	EndEliteEncounter();
 	bReturningHome = true;
 	if (IsValid(CombatComponent))
 	{
