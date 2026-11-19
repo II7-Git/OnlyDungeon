@@ -6,7 +6,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/WidgetComponent.h"
 #include "TimerManager.h"
-#include "UI/ODEnemyNameplateWidget.h"
+#include "Core/ODActorBoundWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
@@ -55,7 +55,8 @@ AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer
 	NameplateComponent->SetRelativeLocation(FVector(0.0, 0.0, 130.0));
 	NameplateComponent->SetWidgetSpace(EWidgetSpace::Screen);
 	NameplateComponent->SetDrawAtDesiredSize(true);
-	NameplateComponent->SetWidgetClass(UODEnemyNameplateWidget::StaticClass());
+	// 위젯 클래스는 BeginPlay에서 정한다. (컴포넌트에 지정이 없으면 DefaultNameplateWidgetClass)
+	DefaultNameplateWidgetClass = FSoftClassPath(TEXT("/Script/OnlyDungeon.ODEnemyNameplateWidget"));
 	NameplateComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	NameplateComponent->SetGenerateOverlapEvents(false);
 	NameplateComponent->SetCanEverAffectNavigation(false);
@@ -104,10 +105,18 @@ void AODEnemyCharacter::BeginPlay()
 			// 캡슐 꼭대기 위에 둔다. (루트 스케일이 적용되므로 스케일 전 높이 기준)
 			const float HalfHeight = IsValid(GetCapsuleComponent()) ? GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : FallbackCapsuleHalfHeight;
 			NameplateComponent->SetRelativeLocation(FVector(0.0, 0.0, HalfHeight + NameplateHeightOffset));
-			NameplateComponent->InitWidget();
-			if (UODEnemyNameplateWidget* Nameplate = Cast<UODEnemyNameplateWidget>(NameplateComponent->GetUserWidgetObject()))
+			if (!NameplateComponent->GetWidgetClass())
 			{
-				Nameplate->SetCharacter(this);
+				// 기본값은 C++ 위젯 클래스라 동기 로드해도 디스크 읽기 없이 바로 해석된다.
+				// 무거운 BP 위젯을 쓸 때는 이 값 대신 이름표 컴포넌트의 위젯 클래스에 직접 지정한다.
+				NameplateComponent->SetWidgetClass(DefaultNameplateWidgetClass.LoadSynchronous());
+				ensureMsgf(NameplateComponent->GetWidgetClass(), TEXT("%s: 이름표 위젯 클래스를 찾지 못했습니다."), *GetName());
+			}
+			NameplateComponent->InitWidget();
+			// 구체 위젯 클래스 대신 인터페이스로 넘긴다. (게임플레이 → UI 의존 방지, CLAUDE.md 12-1)
+			if (IODActorBoundWidget* Nameplate = Cast<IODActorBoundWidget>(NameplateComponent->GetUserWidgetObject()))
+			{
+				Nameplate->BindToActor(this);
 			}
 			GetWorldTimerManager().SetTimer(NameplateTimer, this, &ThisClass::RefreshNameplate, NameplateRefreshInterval, true, 0.0f);
 		}

@@ -86,6 +86,12 @@ void UODEnemyNameplateWidget::SetCharacter(AODCharacterBase* InCharacter)
 	Bind();
 }
 
+void UODEnemyNameplateWidget::BindToActor(AActor* InActor)
+{
+	// 캐릭터가 아니면(nullptr 포함) 연결을 끊는다. Bind가 무효 대상이면 구독 없이 끝난다.
+	SetCharacter(Cast<AODCharacterBase>(InActor));
+}
+
 void UODEnemyNameplateWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
