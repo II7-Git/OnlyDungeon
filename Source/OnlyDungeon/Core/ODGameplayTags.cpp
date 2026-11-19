@@ -10,6 +10,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Attack_Light, "InputTag.Attack.Light", "약공격 (필드에서는 평타)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Attack_Heavy, "InputTag.Attack.Heavy", "강공격 (보스전 전용)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Dodge, "InputTag.Dodge", "회피 (구르기)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Sprint, "InputTag.Sprint", "달리기 (회피 키를 길게 누르면 플레이어가 발동)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Defense, "InputTag.Defense", "방어 (무기에 따라 패링 또는 가드)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Skill_1, "InputTag.Skill.1", "스킬 1 (오른손 무기)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Skill_2, "InputTag.Skill.2", "스킬 2 (왼손 무기)");
@@ -36,6 +37,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_LockOn, "State.LockOn", "락온 중");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Drinking, "State.Drinking", "회복 물약을 마시는 중");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Resting, "State.Resting", "세이브 포인트에서 휴식 중");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Sprinting, "State.Sprinting", "달리는 중 (스태미나 지속 소모)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_1, "State.Phase.1", "보스 1페이즈");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_2, "State.Phase.2", "보스 2페이즈 (체력이 일정 비율 이하)");
 
@@ -56,6 +58,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Damage, "Data.Damage", "SetByCaller: 기본 피해량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_PoiseDamage, "Data.PoiseDamage", "SetByCaller: 강인도 피해량");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_StaminaRegen, "Data.StaminaRegen", "SetByCaller: 이번 회복 틱의 스태미나 회복량");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_StaminaCost, "Data.StaminaCost", "SetByCaller: 이번 틱의 스태미나 변화량 (소모는 음수, 달리기)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Heal, "Data.Heal", "SetByCaller: 이번 회복 틱의 체력 회복량 (물약)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Item, "Ability.Item", "아이템 사용 어빌리티 (물약 등). 행동(Ability.Action)과 구분");
 
