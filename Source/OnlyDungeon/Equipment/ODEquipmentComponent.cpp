@@ -4,6 +4,8 @@
 
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/PoseSnapshot.h"
+#include "Character/ODAnimInstance.h"
 #include "TimerManager.h"
 #include "Character/ODCharacterBase.h"
 #include "GameFramework/Character.h"
@@ -209,7 +211,25 @@ void UODEquipmentComponent::TryApplyPendingAnimClass()
 	}
 
 	UnbindMontageWait();
+
+	// 새 인스턴스는 이전 자세를 모르므로, 바꾸기 직전 자세를 넘겨 AnimSwapBlendTime 동안 섞게 한다.
+	FPoseSnapshot SwapSnapshot;
+	const bool bBlend = bAppliedAnimClassOnce && AnimSwapBlendTime > 0.0f && IsValid(AnimInstance);
+	if (bBlend)
+	{
+		Mesh->SnapshotPose(SwapSnapshot);
+	}
+
 	Mesh->SetAnimInstanceClass(PendingAnimClass);
+	bAppliedAnimClassOnce = true;
+
+	if (bBlend)
+	{
+		if (UODAnimInstance* NewInstance = Cast<UODAnimInstance>(Mesh->GetAnimInstance()))
+		{
+			NewInstance->StartBlendFromSnapshot(SwapSnapshot, AnimSwapBlendTime);
+		}
+	}
 	UE_LOG(LogODCombat, Verbose, TEXT("%s 애님 블루프린트 적용: %s"), *GetNameSafe(GetOwner()), *GetNameSafe(PendingAnimClass.Get()));
 	PendingAnimClass = nullptr;
 }

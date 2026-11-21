@@ -58,6 +58,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Equipment")
 	TObjectPtr<UODWeaponData> DefaultWeapon;
 
+	/** 무기별 애님 블루프린트를 바꿀 때 이전 자세에서 새 자세로 섞는 시간(초). 0이면 바로 바뀐다. 새 애님 인스턴스가 UODAnimInstance여야 적용된다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Equipment", meta = (ClampMin = "0.0"))
+	float AnimSwapBlendTime = 0.25f;
+
 private:
 	UPROPERTY()
 	TObjectPtr<AODWeaponActor> WeaponActor;
@@ -101,4 +105,7 @@ private:
 
 	/** 모든 몽타주 종료를 기다리며 바인딩한 애님 인스턴스 */
 	TWeakObjectPtr<UAnimInstance> MontageWaitInstance;
+
+	/** 애님 블루프린트를 한 번이라도 적용했는가. 첫 적용(시작 시)은 이전 자세가 기준 자세뿐이라 섞지 않는다. */
+	bool bAppliedAnimClassOnce = false;
 };
