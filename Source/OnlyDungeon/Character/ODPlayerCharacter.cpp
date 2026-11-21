@@ -13,6 +13,7 @@
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
 #include "AbilitySystem/ODAbilitySystemComponent.h"
+#include "AbilitySystem/Abilities/ODGameplayAbility_SwapWeapon.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
 #include "Equipment/ODEquipmentComponent.h"
@@ -134,6 +135,10 @@ void AODPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	if (const UInputAction* ResetAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Debug_Reset, false))
 	{
 		EIC->BindAction(ResetAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_Reset);
+	}
+	if (const UInputAction* BossDoorAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Debug_GoToBossDoor, false))
+	{
+		EIC->BindAction(BossDoorAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_GoToBossDoor);
 	}
 
 	// 상호작용 (문 등)
@@ -356,11 +361,39 @@ void AODPlayerCharacter::Input_Debug_SwapWeapon()
 
 	const int32 CurrentIndex = TestWeapons.IndexOfByKey(EquipmentComponent->GetWeaponData());
 	const int32 NextIndex = (CurrentIndex + 1) % TestWeapons.Num();
-	EquipmentComponent->EquipWeapon(TestWeapons[NextIndex]);
+	UODWeaponData* NextWeapon = TestWeapons[NextIndex];
 
+	// 무기 교체 어빌리티가 있으면 넣었다 꺼내는 모션으로 바꾼다. (발동 조건·중복 실행은 어빌리티가 막는다)
+	// 어빌리티가 있는데 막혀서 발동하지 않은 경우(물약·회피 중 등)에는 바로 바꾸지 않고 무시한다.
+	if (IsValid(AbilitySystemComponent))
+	{
+		const bool bHasSwapAbility = AbilitySystemComponent->GetActivatableAbilities().ContainsByPredicate([](const FGameplayAbilitySpec& Spec)
+		{
+			return Spec.Ability && Spec.Ability->IsA<UODGameplayAbility_SwapWeapon>();
+		});
+		if (bHasSwapAbility)
+		{
+			FGameplayEventData Payload;
+			Payload.EventTag = ODGameplayTags::Event_Weapon_SwapRequest;
+			Payload.Instigator = this;
+			Payload.OptionalObject = NextWeapon;
+			AbilitySystemComponent->HandleGameplayEvent(ODGameplayTags::Event_Weapon_SwapRequest, &Payload);
+			return;
+		}
+	}
+
+	// 어빌리티가 없으면 바로 바꾼다.
+	EquipmentComponent->EquipWeapon(NextWeapon);
+	UE_LOG(LogOD, Log, TEXT("무기 즉시 교체: %s"), *GetNameSafe(NextWeapon));
+}
+
+void AODPlayerCharacter::Input_Debug_GoToBossDoor()
+{
+	AODGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AODGameMode>() : nullptr;
+	const bool bMoved = GameMode && GameMode->TeleportPlayerToBossDoor();
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, FString::Printf(TEXT("[테스트] 무기: %s"), *GetNameSafe(TestWeapons[NextIndex])));
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, bMoved ? TEXT("[테스트] 보스방 문 앞으로 이동") : TEXT("[테스트] 보스방 입구가 없어 이동하지 못했습니다"));
 	}
 }
 

@@ -6,6 +6,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "DefaultLevelSequenceInstanceData.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -25,6 +26,20 @@
 namespace ODBossEntrance
 {
 	constexpr float DoorTickInterval = 1.0f / 60.0f;
+	/** 문짝·상인방·안개 메시는 엔진 기본 큐브·판(100cm) 기준으로 크기를 맞춘다. */
+	constexpr double BasicShapeSize = 100.0;
+	/** 상인방 두께, 문 양옆으로 더 덮는 폭 */
+	constexpr double LintelDepth = 40.0;
+	constexpr double LintelOverhang = 100.0;
+	/** 안개판이 문보다 넓고 높게 덮는 여유 */
+	constexpr double FogMargin = 60.0;
+	/** 상호작용 범위: 문 앞 깊이·높이 반값, 문 폭 밖으로 더 받는 폭 */
+	constexpr double TriggerHalfDepth = 200.0;
+	constexpr double TriggerHalfHeight = 150.0;
+	constexpr double TriggerSideMargin = 100.0;
+	constexpr double TriggerMinHalfWidth = 300.0;
+	/** 안개 재질의 짙기 파라미터 (1 = 짙음, 0 = 다 걷힘) */
+	const FName FogFadeParameter(TEXT("Fade"));
 }
 
 AODBossEntrance::AODBossEntrance(const FObjectInitializer& ObjectInitializer)
@@ -40,40 +55,28 @@ AODBossEntrance::AODBossEntrance(const FObjectInitializer& ObjectInitializer)
 	// 문짝: 경첩(회전축)에 붙인다. 메시는 BP에서 지정 (기본 크기는 100cm 큐브 기준)
 	LeftHinge = CreateDefaultSubobject<USceneComponent>(TEXT("LeftHinge"));
 	LeftHinge->SetupAttachment(SceneRoot);
-	LeftHinge->SetRelativeLocation(FVector(0.0, -150.0, 0.0));
 
 	LeftDoor = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LeftDoor"));
 	LeftDoor->SetupAttachment(LeftHinge);
-	LeftDoor->SetRelativeLocation(FVector(0.0, 75.0, 200.0));
-	LeftDoor->SetRelativeScale3D(FVector(0.2, 1.5, 4.0));
 
 	RightHinge = CreateDefaultSubobject<USceneComponent>(TEXT("RightHinge"));
 	RightHinge->SetupAttachment(SceneRoot);
-	RightHinge->SetRelativeLocation(FVector(0.0, 150.0, 0.0));
 
 	RightDoor = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RightDoor"));
 	RightDoor->SetupAttachment(RightHinge);
-	RightDoor->SetRelativeLocation(FVector(0.0, -75.0, 200.0));
-	RightDoor->SetRelativeScale3D(FVector(0.2, 1.5, 4.0));
 
 	Lintel = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Lintel"));
 	Lintel->SetupAttachment(SceneRoot);
-	Lintel->SetRelativeLocation(FVector(0.0, 0.0, 450.0));
-	Lintel->SetRelativeScale3D(FVector(0.4, 4.0, 1.0));
 
 	// 안개벽은 보이기만 하는 판이다. 실제로 막는 것은 문짝이다.
 	FogWall = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("FogWall"));
 	FogWall->SetupAttachment(SceneRoot);
-	FogWall->SetRelativeLocation(FVector(-45.0, 0.0, 230.0));
 	FogWall->SetRelativeRotation(FRotator(90.0, 0.0, 0.0));
-	FogWall->SetRelativeScale3D(FVector(4.6, 3.6, 1.0));
 	FogWall->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	FogWall->SetCastShadow(false);
 
 	InteractionTrigger = CreateDefaultSubobject<UBoxComponent>(TEXT("InteractionTrigger"));
 	InteractionTrigger->SetupAttachment(SceneRoot);
-	InteractionTrigger->SetRelativeLocation(FVector(-250.0, 0.0, 150.0));
-	InteractionTrigger->SetBoxExtent(FVector(200.0, 300.0, 150.0));
 	InteractionTrigger->SetCollisionProfileName(TEXT("Trigger"));
 
 	EntryPoint = CreateDefaultSubobject<UArrowComponent>(TEXT("EntryPoint"));
@@ -87,6 +90,41 @@ AODBossEntrance::AODBossEntrance(const FObjectInitializer& ObjectInitializer)
 	RoomPoint->ArrowColor = FColor::Red;
 
 	InteractionText = NSLOCTEXT("OnlyDungeon", "BossEntranceEnter", "보스방 입장");
+
+	ApplyDoorLayout();
+}
+
+void AODBossEntrance::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	// 레벨에서 DoorWidth·DoorHeight를 바꾸면 바로 반영되게 한다.
+	ApplyDoorLayout();
+}
+
+void AODBossEntrance::ApplyDoorLayout()
+{
+	using namespace ODBossEntrance;
+	const double HalfWidth = DoorWidth * 0.5;
+
+	// 경첩은 문 양끝, 문짝은 경첩에서 문 가운데 쪽으로 반 폭만큼
+	LeftHinge->SetRelativeLocation(FVector(0.0, -HalfWidth, 0.0));
+	RightHinge->SetRelativeLocation(FVector(0.0, HalfWidth, 0.0));
+	const FVector LeafScale(DoorThickness / BasicShapeSize, HalfWidth / BasicShapeSize, DoorHeight / BasicShapeSize);
+	LeftDoor->SetRelativeLocation(FVector(0.0, HalfWidth * 0.5, DoorHeight * 0.5));
+	LeftDoor->SetRelativeScale3D(LeafScale);
+	RightDoor->SetRelativeLocation(FVector(0.0, -HalfWidth * 0.5, DoorHeight * 0.5));
+	RightDoor->SetRelativeScale3D(LeafScale);
+
+	Lintel->SetRelativeLocation(FVector(0.0, 0.0, DoorHeight + LintelHeight * 0.5));
+	Lintel->SetRelativeScale3D(FVector(LintelDepth / BasicShapeSize, (DoorWidth + LintelOverhang) / BasicShapeSize, LintelHeight / BasicShapeSize));
+
+	// 안개판(판 메시를 세운 것: X = 높이, Y = 폭)은 문짝 뒤 통로 안에 둔다.
+	const double FogHeight = DoorHeight + FogMargin;
+	FogWall->SetRelativeLocation(FVector(FogInset, 0.0, FogHeight * 0.5));
+	FogWall->SetRelativeScale3D(FVector(FogHeight / BasicShapeSize, (DoorWidth + FogMargin) / BasicShapeSize, 1.0));
+
+	InteractionTrigger->SetRelativeLocation(FVector(EntryPoint->GetRelativeLocation().X, 0.0, TriggerHalfHeight));
+	InteractionTrigger->SetBoxExtent(FVector(TriggerHalfDepth, FMath::Max(HalfWidth + TriggerSideMargin, TriggerMinHalfWidth), TriggerHalfHeight));
 }
 
 void AODBossEntrance::BeginPlay()
@@ -96,6 +134,8 @@ void AODBossEntrance::BeginPlay()
 	InteractionTrigger->OnComponentBeginOverlap.AddUniqueDynamic(this, &ThisClass::OnTriggerBeginOverlap);
 	InteractionTrigger->OnComponentEndOverlap.AddUniqueDynamic(this, &ThisClass::OnTriggerEndOverlap);
 	SetDoorAlpha(0.0f);
+	FogMaterial = FogWall->CreateDynamicMaterialInstance(0);
+	SetFogAmount(1.0f);
 }
 
 void AODBossEntrance::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -168,9 +208,6 @@ void AODBossEntrance::StartEntrySequence()
 		return;
 	}
 
-	// 안개벽을 걷고 들어간다.
-	FogWall->SetVisibility(false);
-
 	// 2) 입장 시퀀스 재생 (EntryPoint 기준)
 	if (IsValid(EntrySequence))
 	{
@@ -205,6 +242,43 @@ void AODBossEntrance::StartEntrySequence()
 	FTimerManager& TimerManager = World->GetTimerManager();
 	TimerManager.SetTimer(DoorDelayTimer, FTimerDelegate::CreateUObject(this, &ThisClass::AnimateDoor, 1.0f), FMath::Max(DoorOpenDelay, KINDA_SMALL_NUMBER), false);
 	TimerManager.SetTimer(WalkTimer, this, &ThisClass::StartWalkIn, FMath::Max(WalkInStartTime, KINDA_SMALL_NUMBER), false);
+	// 문이 열려 안쪽 안개가 드러난 뒤, 걸어 들어가는 동안 걷힌다.
+	TimerManager.SetTimer(FogDelayTimer, this, &ThisClass::StartFogFade, FMath::Max(FogFadeDelay, KINDA_SMALL_NUMBER), false);
+}
+
+void AODBossEntrance::StartFogFade()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	FogFadeStartTime = World->GetTimeSeconds();
+	World->GetTimerManager().SetTimer(FogFadeTimer, this, &ThisClass::UpdateFogFade, ODBossEntrance::DoorTickInterval, true);
+}
+
+void AODBossEntrance::UpdateFogFade()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+	const float T = FMath::Clamp(static_cast<float>(World->GetTimeSeconds() - FogFadeStartTime) / FogFadeTime, 0.0f, 1.0f);
+	SetFogAmount(1.0f - FMath::InterpEaseOut(0.0f, 1.0f, T, 2.0f));
+	if (T >= 1.0f)
+	{
+		World->GetTimerManager().ClearTimer(FogFadeTimer);
+	}
+}
+
+void AODBossEntrance::SetFogAmount(float Amount)
+{
+	if (IsValid(FogMaterial))
+	{
+		FogMaterial->SetScalarParameterValue(ODBossEntrance::FogFadeParameter, Amount);
+	}
+	FogWall->SetVisibility(Amount > 0.0f);
 }
 
 void AODBossEntrance::StartWalkIn()
@@ -457,6 +531,11 @@ void AODBossEntrance::SetDoorAlpha(float Alpha)
 	RightHinge->SetRelativeRotation(FRotator(0.0f, DoorOpenAngle * Alpha, 0.0f));
 }
 
+FTransform AODBossEntrance::GetEntryTransform() const
+{
+	return FTransform(FRotator(0.0f, EntryPoint->GetComponentRotation().Yaw, 0.0f), EntryPoint->GetComponentLocation());
+}
+
 void AODBossEntrance::ResetForTest()
 {
 	if (UWorld* World = GetWorld())
@@ -465,6 +544,8 @@ void AODBossEntrance::ResetForTest()
 		World->GetTimerManager().ClearTimer(DoorDelayTimer);
 		World->GetTimerManager().ClearTimer(WalkTimer);
 		World->GetTimerManager().ClearTimer(FinishTimer);
+		World->GetTimerManager().ClearTimer(FogDelayTimer);
+		World->GetTimerManager().ClearTimer(FogFadeTimer);
 	}
 	StopWalk();
 
@@ -491,7 +572,7 @@ void AODBossEntrance::ResetForTest()
 	SequenceActor = nullptr;
 
 	SetDoorAlpha(0.0f);
-	FogWall->SetVisibility(true);
+	SetFogAmount(1.0f);
 	const bool bWasEntered = bUsed || bInProgress;
 	bUsed = false;
 	bInProgress = false;

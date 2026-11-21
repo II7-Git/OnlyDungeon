@@ -9,6 +9,7 @@
 #include "ODBossEntrance.generated.h"
 
 class UArrowComponent;
+class UMaterialInstanceDynamic;
 class UBoxComponent;
 class UPrimitiveComponent;
 class UStaticMeshComponent;
@@ -25,6 +26,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODBossEntranceSignature, APawn*, En
  * 보스방 입구. 플레이어가 문 앞 트리거 안에서 상호작용하면:
  *  1) 컷신 상태로 전환(입력 차단, HUD 숨김), 문 정면 지점(EntryPoint)까지 걸어가 문 쪽으로 돌아선다.
  *  2) 그 자리에서 입장 레벨 시퀀스가 시작되고 문이 열린다. 시퀀스는 EntryPoint 기준 상대 좌표로 재생된다. (Transform Origin)
+ *     문 안쪽 통로의 안개가 드러났다가 걸어 들어가는 동안 걷힌다.
  *  3) 플레이어가 문을 지나 보스방 지점(RoomPoint)까지 걸어 들어간다.
  *     이동은 실제 이동 입력(AddMovementInput)으로 줘서 걷기·조깅 애니메이션이 그대로 재생된다.
  *     (Root Motion Source는 가속이 없어 애니메이션 블루프린트가 대기 상태로 남는다)
@@ -53,11 +55,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "OD|Test")
 	void ResetForTest();
 
+	/** 입장 시작 지점 (문 앞 바닥, 문을 향함). 테스트 이동 등에서 쓴다. */
+	FTransform GetEntryTransform() const;
+
 	/** 입장이 끝났을 때 (보스 활성화 등) */
 	UPROPERTY(BlueprintAssignable, Category = "OD|BossEntrance")
 	FODBossEntranceSignature OnEntered;
 
 protected:
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
@@ -83,7 +89,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
 	TObjectPtr<UStaticMeshComponent> Lintel;
 
-	/** 문 앞 안개벽. 입장 연출이 시작되면 사라지고, 입구가 초기화되면 다시 나타난다. (메시·재질은 BP에서 지정) */
+	/**
+	 * 문 안쪽 통로의 안개. 문이 닫혀 있을 때는 문짝에 가려 보이지 않고, 문이 열리면 드러났다가
+	 * 걸어 들어가는 동안 서서히 걷힌다. 입구가 초기화되면 다시 나타난다. (메시·재질은 BP에서 지정, 재질의 Fade 파라미터로 옅어진다)
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
 	TObjectPtr<UStaticMeshComponent> FogWall;
 
@@ -117,6 +126,34 @@ protected:
 	/** 입장 후 전투 모드 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance")
 	EODCombatMode ModeAfterEntry = EODCombatMode::Boss;
+
+	/** 문 전체 폭 (두 문짝 합). 문짝·상인방·안개·상호작용 범위가 이 크기에 맞춰 배치된다. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Door", meta = (ClampMin = "100.0", Units = "cm"))
+	float DoorWidth = 300.0f;
+
+	/** 문짝 높이 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Door", meta = (ClampMin = "100.0", Units = "cm"))
+	float DoorHeight = 400.0f;
+
+	/** 문짝 두께 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Door", meta = (ClampMin = "1.0", Units = "cm"))
+	float DoorThickness = 20.0f;
+
+	/** 문 위 상인방 높이 (문짝 위를 덮어 틈을 막는다) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Door", meta = (ClampMin = "1.0", Units = "cm"))
+	float LintelHeight = 100.0f;
+
+	/** 안개가 문짝 뒤(방 안쪽)로 들어가 있는 거리 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Fog", meta = (ClampMin = "0.0", Units = "cm"))
+	float FogInset = 120.0f;
+
+	/** 시퀀스 시작 후 안개가 걷히기 시작하는 시각 (문이 열려 안개가 보인 뒤) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Fog", meta = (ClampMin = "0.0", Units = "s"))
+	float FogFadeDelay = 1.0f;
+
+	/** 안개가 다 걷히는 데 걸리는 시간 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Fog", meta = (ClampMin = "0.05", Units = "s"))
+	float FogFadeTime = 1.5f;
 
 	/** 문 열림 각도 / 시간 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Door")
@@ -184,6 +221,20 @@ private:
 	void UpdateDoor();
 	void SetDoorAlpha(float Alpha);
 
+	/** DoorWidth·DoorHeight에 맞춰 문짝·상인방·안개·상호작용 범위를 배치한다. */
+	void ApplyDoorLayout();
+
+	/** 안개 걷힘 (0 = 다 걷힘, 1 = 짙음) */
+	void StartFogFade();
+	void UpdateFogFade();
+	void SetFogAmount(float Amount);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> FogMaterial;
+
+	double FogFadeStartTime = 0.0;
+	FTimerHandle FogDelayTimer;
+	FTimerHandle FogFadeTimer;
 
 	UPROPERTY(Transient)
 	TObjectPtr<ULevelSequencePlayer> SequencePlayer;

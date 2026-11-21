@@ -73,11 +73,14 @@ protected:
 	/** 회피 키를 누르고 있는 동안: 달리기를 시도한다. (회피·공격 중이라 실패하면 끝나는 대로 시작되도록 다시 시도) */
 	void TryStartSprintFromHold();
 
-	/** [테스트] 무기 교체 (TestWeapons를 순서대로) */
+	/** 무기 교체 (Tab, TestWeapons를 순서대로). 무기 교체 어빌리티가 있으면 넣었다 꺼내는 모션으로, 없으면 바로 바꾼다. */
 	void Input_Debug_SwapWeapon();
 
 	/** [테스트] 월드의 모든 OD 캐릭터 상태 초기화 */
 	void Input_Debug_Reset();
+
+	/** [테스트] 보스방 문 앞으로 이동 (AODGameMode::TeleportPlayerToBossDoor) */
+	void Input_Debug_GoToBossDoor();
 
 	/** 카메라 붐 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Camera")

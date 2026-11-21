@@ -40,6 +40,13 @@ struct FODCombatModeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Mode", meta = (EditCondition = "bUseControlRotation"))
 	float EnterPitch = -15.0f;
 
+	/**
+	 * 카메라 암 끝(카메라가 도는 중심)의 높이 보정 (월드 공간).
+	 * 3인칭에서 카메라를 캐릭터 약간 위에 두어 내려다보게 한다. (소울류 3인칭 시점)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Mode", meta = (Units = "cm"))
+	FVector CameraTargetOffset = FVector::ZeroVector;
+
 	/** 카메라가 벽에 막히면 당겨 올지 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Mode")
 	bool bDoCollisionTest = true;

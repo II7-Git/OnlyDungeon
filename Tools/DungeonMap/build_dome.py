@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """돔 보스룸: 돔·원통 벽·바닥 메시 생성(Geometry Script)과 던전 키트 벽·기둥 배치.
 내부 지름 약 44m, 바닥~돔 꼭대기 약 38m. 문은 화면 아래쪽(월드 요 225도)을 향한다."""
 import math
@@ -23,7 +23,8 @@ FLOOR_Z = L.FLOOR_RISE * 100.0
 SPRING = 2260.0     # 돔이 시작되는 높이
 R_IN, H_IN, OCULUS = 2400.0, 1500.0, 350.0
 DOOR_YAW = 225.0    # 방 중심에서 문 방향
-GAP_DEG = 8.0       # 원통 벽의 문 틈 (폭 약 3.6m)
+GAP_DEG = 14.0      # 원통 벽의 문 틈 (바깥면 폭 약 6.6m < 문 6.8m라 문짝이 가장자리를 덮는다). 기존 8.0
+DOOR_TOP = 860.0    # 문 위 벽이 시작하는 높이 (문 8m + 상인방 1m가 덮음). 기존 470
 BAYS = 16
 CX, CY = L.to_world(*L.DOME_CENTER)
 
@@ -90,7 +91,7 @@ def build_meshes():
         shell=mesh_asset('SM_Dome_Shell', [dome_loop()], stone, 600.0),
         drum=mesh_asset('SM_Dome_Drum', [rect(2450.0, 2700.0, -100.0, SPRING + 90.0)], stone, 600.0, 360.0 - GAP_DEG, GAP_DEG / 2.0),
         floor=mesh_asset('SM_Dome_Floor', [[(1.0, 0.0), (2720.0, 0.0), (2720.0, -120.0), (1.0, -120.0), (1.0, 0.0)]], tile, 480.0, planar=True),
-        fill=mesh_asset('SM_Dome_DrumFill', [rect(2450.0, 2700.0, 470.0, SPRING + 90.0)], stone, 600.0, GAP_DEG + 0.4, -GAP_DEG / 2.0 - 0.2, 6),
+        fill=mesh_asset('SM_Dome_DrumFill', [rect(2450.0, 2700.0, DOOR_TOP, SPRING + 90.0)], stone, 600.0, GAP_DEG + 0.4, -GAP_DEG / 2.0 - 0.2, 6),
         cornice=mesh_asset('SM_Dome_Cornice', [rect(2230.0, 2460.0, SPRING - 70.0, SPRING + 30.0)], stone, 300.0),
         ring=mesh_asset('SM_Dome_OculusRing', [rect(OCULUS - 30.0, OCULUS + 90.0, SPRING + H_IN - 110.0, SPRING + H_IN + 170.0)], stone, 300.0),
         rib=mesh_asset('SM_Dome_Rib', [rib_loop()], stone, 300.0, 2.4, -1.2, 3),
@@ -144,6 +145,30 @@ def build():
             place(pillar, 'BR_Buttress_%02d' % i, polar(deg, 2800.0, -40.0), deg, (3.2, 3.2, 5.0))
     # 문 양옆 기둥과 위 아치
     for s in (-1, 1):
-        place(pillar, 'BR_DoorPillar_%d' % s, polar(DOOR_YAW + s * 6.5, 2400.0), DOOR_YAW, (1.8, 1.8, 1.65))
+        # 통로를 막지 않게 문 틈 가장자리보다 바깥에 둔다
+        place(pillar, 'BR_DoorPillar_%d' % s, polar(DOOR_YAW + s * (GAP_DEG / 2.0 + 2.5), 2400.0), DOOR_YAW, (1.8, 1.8, 1.65))
     unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
     return dict(actors=sum(1 for a in eas.get_all_level_actors() if a.get_actor_label().startswith('BR_')), wall_scale=round(wx, 3))
+
+
+def rebuild_door_opening():
+    """문 틈 관련 메시(원통 벽·문 위 벽)와 문 옆 기둥만 다시 만든다. 나머지 보스방 배치는 그대로 둔다"""
+    stone = unreal.load_asset('/Game/Dungeon/Materials/Material_Instances/MI_Stone_Wall_00') if eal.does_asset_exist('/Game/Dungeon/Materials/Material_Instances/MI_Stone_Wall_00') else unreal.load_asset(K + 'SM_Roof').get_material(0)
+    drum = mesh_asset('SM_Dome_Drum', [rect(2450.0, 2700.0, -100.0, SPRING + 90.0)], stone, 600.0, 360.0 - GAP_DEG, GAP_DEG / 2.0)
+    fill = mesh_asset('SM_Dome_DrumFill', [rect(2450.0, 2700.0, DOOR_TOP, SPRING + 90.0)], stone, 600.0, GAP_DEG + 0.4, -GAP_DEG / 2.0 - 0.2, 6)
+    pillar = unreal.load_asset(K + 'SM_Pillar')
+    out = []
+    for a in eas.get_all_level_actors():
+        lab = a.get_actor_label()
+        if lab == 'BR_Drum':
+            a.static_mesh_component.set_static_mesh(drum)
+            out.append(lab)
+        elif lab == 'BR_DrumFill':
+            a.static_mesh_component.set_static_mesh(fill)
+            out.append(lab)
+        elif lab.startswith('BR_DoorPillar_'):
+            s = -1 if lab.endswith('-1') else 1
+            a.set_actor_location(polar(DOOR_YAW + s * (GAP_DEG / 2.0 + 2.5), 2400.0), False, False)
+            out.append(lab)
+    unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
+    return out

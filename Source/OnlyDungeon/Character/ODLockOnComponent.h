@@ -8,6 +8,7 @@
 #include "ODLockOnComponent.generated.h"
 
 class AODCharacterBase;
+class USpringArmComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODLockOnTargetChangedSignature, AActor*, NewTarget);
 
@@ -18,7 +19,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODLockOnTargetChangedSignature, AAc
  * - State.LockOn 태그를 붙인다. 회피는 이 태그와 GetLockOnTarget()을 보고 8방향 구르기를 쓴다.
  * - 대상 사망, 거리 초과, 필드 모드 전환, 컷신 시작, 본인 사망 시 자동으로 풀린다.
  * - 대상 전환: 락온 중 마우스를 좌우로 크게 휘두르면(짧은 시간 안에 누적 이동량이 임계값 이상) 그 방향에 있는 적으로 바꾼다.
- * 카메라가 매 프레임 대상을 따라가야 하므로 락온 중에만 Tick을 켠다.
+ * - 락온 중에는 대상이 멀수록·클수록 카메라를 뒤로 빼고 올려서 플레이어와 대상이 함께 보이게 한다. (풀면 모드 기본값으로 되돌림)
+ * 카메라가 매 프레임 대상을 따라가야 하므로 락온 중(과 해제 후 카메라를 되돌리는 동안)에만 Tick을 켠다.
  */
 UCLASS(ClassGroup = (OnlyDungeon), meta = (BlueprintSpawnableComponent))
 class ONLYDUNGEON_API UODLockOnComponent : public UActorComponent
@@ -90,9 +92,37 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn", meta = (Units = "deg"))
 	float CameraPitchOffset = -12.0f;
 
-	/** 락온 중 카메라 피치 범위 */
+	/** 락온 중 카메라 피치 범위. 최대값을 0 아래로 두어 큰 보스를 잡아도 위를 올려다보지 않는다. */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn")
-	FVector2D CameraPitchRange = FVector2D(-45.0, 20.0);
+	FVector2D CameraPitchRange = FVector2D(-45.0, -5.0);
+
+	/** 카메라가 겨누는 높이의 상한 (플레이어 중심 기준). 큰 보스의 몸통·머리를 그대로 겨누면 카메라가 위를 본다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn", meta = (ClampMin = "0.0", Units = "cm"))
+	float AimMaxHeightAboveOwner = 150.0f;
+
+	/** 화면 맞춤: 대상과 이 거리보다 멀어지면 카메라를 뒤로 뺀다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn|Framing", meta = (ClampMin = "0.0", Units = "cm"))
+	float FramingStartDistance = 300.0f;
+
+	/** 화면 맞춤: FramingStartDistance를 넘는 거리 1cm마다 카메라를 뒤로 빼는 양 (cm) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn|Framing", meta = (ClampMin = "0.0"))
+	float FramingArmPerDistance = 0.35f;
+
+	/** 화면 맞춤: 대상이 플레이어보다 클 때(캡슐 반높이 차이 1cm마다) 카메라를 뒤로 빼는 양 (cm) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn|Framing", meta = (ClampMin = "0.0"))
+	float FramingArmPerTargetSize = 1.2f;
+
+	/** 화면 맞춤: 카메라를 뒤로 빼는 최대량 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn|Framing", meta = (ClampMin = "0.0", Units = "cm"))
+	float FramingMaxExtraArm = 300.0f;
+
+	/** 화면 맞춤: 뒤로 뺀 거리 1cm마다 카메라 중심을 올리는 양 (멀어질수록 더 위에서 내려다본다) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn|Framing", meta = (ClampMin = "0.0"))
+	float FramingHeightPerArm = 0.3f;
+
+	/** 화면 맞춤: 카메라 거리·높이가 목표값을 따라가는 속도 (락온 해제 후 되돌아갈 때도 사용) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn|Framing", meta = (ClampMin = "0.1"))
+	float FramingInterpSpeed = 3.0f;
 
 	/** 대상 전환: 이 시간 안에 누적한 좌우 시점 입력이 SwitchFlickThreshold 이상이면 전환 (마우스 픽셀 단위) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|LockOn|Switch", meta = (ClampMin = "1.0"))
@@ -123,6 +153,18 @@ private:
 
 	/** 락온 중에는 이동 방향 대신 대상(컨트롤 방향)을 바라보게 한다. */
 	void ApplyCharacterFacing(bool bLockedOn) const;
+
+	/**
+	 * 카메라 암 거리·높이를 목표값으로 보간한다. 락온 중이면 대상 거리·크기에 맞춘 값, 아니면 현재 모드의 기본값.
+	 * @return 기본값으로 되돌아가는 중이고 다 돌아왔으면 true
+	 */
+	bool UpdateFraming(float DeltaTime);
+
+	/** 락온 해제 후 카메라를 기본 거리·높이로 되돌리는 중인지 (이 동안 Tick을 유지한다) */
+	bool bRestoringFraming = false;
+
+	TWeakObjectPtr<USpringArmComponent> CachedBoom;
+	TWeakObjectPtr<UODCombatModeComponent> CachedModeComponent;
 
 	UFUNCTION()
 	void HandleCharacterDeath(AODCharacterBase* DeadCharacter);

@@ -11,6 +11,7 @@ class AODWeaponActor;
 class UAnimInstance;
 class UODAbilitySet;
 class UStaticMesh;
+class UMaterialInterface;
 
 /**
  * 무기 하나를 정의하는 데이터 에셋. 에셋 접두사: DA_Weapon_ (예: DA_Weapon_OneHandSword)
@@ -26,6 +27,10 @@ public:
 	/** 화면에 표시할 무기 이름 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon")
 	FText DisplayName;
+
+	/** HUD 오른손 칸에 보일 아이콘 (UI 재질, Tools/UI/build_item_icons.py가 메시를 찍어 만든다). 비우면 이름 글자만 보인다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|UI")
+	TSoftObjectPtr<UMaterialInterface> HudIcon;
 
 	/** 무기 타입 (Weapon.Type.*). 장착 중 ASC에 태그로 붙는다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon", meta = (Categories = "Weapon.Type"))

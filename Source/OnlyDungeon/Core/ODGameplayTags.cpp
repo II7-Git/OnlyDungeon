@@ -19,6 +19,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Interact, "InputTag.Interact", "상호작용 (문 등)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Debug_SwapWeapon, "InputTag.Debug.SwapWeapon", "[테스트] 무기 교체");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Debug_Reset, "InputTag.Debug.Reset", "[테스트] 모든 캐릭터 상태 초기화");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Debug_GoToBossDoor, "InputTag.Debug.GoToBossDoor", "[테스트] 보스방 문 앞으로 이동");
 
 	// ---------- 전투 모드 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_Field, "Mode.Field", "필드: 쿼터뷰 핵앤슬래시");
@@ -38,6 +39,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Drinking, "State.Drinking", "회복 물약을 마시는 중");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Resting, "State.Resting", "세이브 포인트에서 휴식 중");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Sprinting, "State.Sprinting", "달리는 중 (스태미나 지속 소모)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_SwappingWeapon, "State.SwappingWeapon", "무기 교체 중 (넣었다 꺼내는 모션)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_1, "State.Phase.1", "보스 1페이즈");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Phase_2, "State.Phase.2", "보스 2페이즈 (체력이 일정 비율 이하)");
 
@@ -50,6 +52,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_HitTrace, "Event.Montage.HitTrace", "공격 몽타주의 판정 구간 (AnimNotify → 어빌리티)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Melee_Hit, "Event.Melee.Hit", "내 무기가 대상을 맞힘 (무기 → 공격 어빌리티)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_CancelWindow, "Event.Montage.CancelWindow", "캔슬 구간 (열림 1 / 닫힘 0, AnimNotify → 어빌리티)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_WeaponSwap, "Event.Montage.WeaponSwap", "무기 교체 구간 (1 = 무기를 등에 넣음 → 다음 무기로 교체, 0 = 새 무기를 꺼내 손에 쥠)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Combo_BranchInput, "Event.Combo.BranchInput", "공격 중 파생 공격 입력 (ASC → 진행 중인 콤보, InstigatorTags에 입력 태그)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Action, "Ability.Action", "공격·방어·회피처럼 캔슬 구간에서 끊길 수 있는 행동 어빌리티");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Montage_ComboWindow, "Event.Montage.ComboWindow", "콤보 입력 구간 (열림 1 / 닫힘 0, AnimNotify → 어빌리티)");
@@ -69,6 +72,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Boss_Intro, "Event.Boss.Intro", "보스가 전투를 시작함 (등장 포효)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Boss_PhaseChange, "Event.Boss.PhaseChange", "보스가 다음 페이즈로 넘어감 (전환 포효)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Rest, "Event.Rest", "세이브 포인트에서 휴식 시작 (OptionalObject = 세이브 포인트)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Weapon_SwapRequest, "Event.Weapon.SwapRequest", "무기 교체 요청 (Tab, OptionalObject = 꺼낼 무기 데이터)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Hit, "GameplayCue.Hit", "근접 공격 피격 이펙트 (피해 GE 실행 시, 맞은 캐릭터의 HitImpactEffect)");
 
 	// ---------- 무기 종류 ----------

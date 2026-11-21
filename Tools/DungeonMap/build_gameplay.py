@@ -20,6 +20,7 @@ ENV = '/Game/OnlyDungeon/Environment/'
 MAP = '/Game/OnlyDungeon/Maps/L_OD_Dungeon_01'
 FOG = ENV + 'M_OD_FogWall'
 Idle = unreal.ODEnemyIdleBehavior
+DOOR_WIDTH, DOOR_HEIGHT = 680.0, 800.0  # 보스 입구 문 (cm)
 
 
 def cls(path):
@@ -83,9 +84,35 @@ def build_fog_material():
     MEL.connect_material_expressions(op, '', em, 'B')
     MEL.connect_material_property(em, '', unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     MEL.connect_material_property(op, '', unreal.MaterialProperty.MP_OPACITY)
+    add_fog_fade(m)
+    return m
+
+
+def add_fog_fade(m):
+    """안개 짙기 파라미터 Fade(1 = 짙음, 0 = 다 걷힘)를 불투명도·발광에 곱한다. AODBossEntrance가 입장할 때 줄인다.
+    이미 있으면 그대로 둔다 (기존 재질에도 덧붙일 수 있게)"""
+    exprs = MEL.get_material_expressions(m)
+    if any(isinstance(x, unreal.MaterialExpressionScalarParameter) and str(x.get_editor_property('parameter_name')) == 'Fade' for x in exprs):
+        return False
+    # 발광 = 색 상수 x 불투명도 곱셈. 그 곱셈의 다른 입력이 불투명도 노드다
+    em = op = None
+    for x in exprs:
+        if isinstance(x, unreal.MaterialExpressionMultiply):
+            ins = MEL.get_inputs_for_material_expression(m, x)
+            if any(isinstance(i, unreal.MaterialExpressionConstant3Vector) for i in ins):
+                em = x
+                op = [i for i in ins if not isinstance(i, unreal.MaterialExpressionConstant3Vector)][0]
+    fade = MEL.create_material_expression(m, unreal.MaterialExpressionScalarParameter, -100, 500)
+    fade.set_editor_property('parameter_name', 'Fade')
+    fade.set_editor_property('default_value', 1.0)
+    fo = MEL.create_material_expression(m, unreal.MaterialExpressionMultiply, 50, 400)
+    MEL.connect_material_expressions(op, '', fo, 'A')
+    MEL.connect_material_expressions(fade, '', fo, 'B')
+    MEL.connect_material_expressions(fo, '', em, 'B')
+    MEL.connect_material_property(fo, '', unreal.MaterialProperty.MP_OPACITY)
     MEL.recompile_material(m)
     eal.save_loaded_asset(m, False)
-    return m
+    return True
 
 
 def setup_entrance_bp(fog):
@@ -277,6 +304,9 @@ def build():
     a = math.radians(225.0)
     ent = spawn(cls('/Game/OnlyDungeon/World/BP_ODBossEntrance'), 'GP_BossEntrance', unreal.Vector(cx + 2700.0 * math.cos(a), cy + 2700.0 * math.sin(a), L.FLOOR_RISE * 100.0), 45.0)
     ent.set_editor_property('bosses', [golem])
+    # 보스방 느낌을 위해 문을 기본(3x4m)의 약 두 배로. 벽 구멍(build_dome.GAP_DEG·DOOR_TOP)보다 조금 넓어 틈이 생기지 않는다
+    ent.set_editor_property('door_width', DOOR_WIDTH)
+    ent.set_editor_property('door_height', DOOR_HEIGHT)
     door = unreal.load_asset('/Game/Dungeon/Meshes/Props/SM_Dungeon_door').get_material(0)
     stone = unreal.load_asset('/Game/Dungeon/Meshes/Props/SM_Roof').get_material(0)
     for c in ent.get_components_by_class(unreal.StaticMeshComponent):

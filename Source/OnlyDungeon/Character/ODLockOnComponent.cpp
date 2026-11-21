@@ -2,14 +2,23 @@
 
 #include "ODLockOnComponent.h"
 
+#include "Components/CapsuleComponent.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "AbilitySystem/ODAbilitySystemComponent.h"
 #include "Character/ODCharacterBase.h"
+#include "Character/ODPlayerCharacter.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
+
+namespace ODLockOn
+{
+	/** 카메라 거리·높이가 목표값에 이만큼 가까워지면 되돌리기를 끝낸다 (cm) */
+	constexpr float FramingArriveTolerance = 1.0f;
+}
 
 UODLockOnComponent::UODLockOnComponent(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -33,8 +42,13 @@ void UODLockOnComponent::BeginPlay()
 	{
 		Character->OnDeath.AddUniqueDynamic(this, &ThisClass::HandleCharacterDeath);
 	}
+	if (const AODPlayerCharacter* Player = Cast<AODPlayerCharacter>(Owner))
+	{
+		CachedBoom = Player->GetCameraBoom();
+	}
 	if (UODCombatModeComponent* ModeComponent = Owner->FindComponentByClass<UODCombatModeComponent>())
 	{
+		CachedModeComponent = ModeComponent;
 		ModeComponent->OnCombatModeChanged.AddUniqueDynamic(this, &ThisClass::HandleCombatModeChanged);
 		ModeComponent->OnCinematicChanged.AddUniqueDynamic(this, &ThisClass::HandleCinematicChanged);
 	}
@@ -127,7 +141,9 @@ void UODLockOnComponent::SetTarget(AActor* NewTarget)
 	}
 
 	ApplyCharacterFacing(bLockedOn);
-	SetComponentTickEnabled(bLockedOn);
+	// 락온을 풀면 카메라 거리·높이를 모드 기본값으로 천천히 되돌린다. (되돌아오는 동안 Tick 유지)
+	bRestoringFraming = !bLockedOn && CachedBoom.IsValid();
+	SetComponentTickEnabled(bLockedOn || bRestoringFraming);
 
 	UE_LOG(LogODCombat, Log, TEXT("%s 락온: %s"), *GetNameSafe(GetOwner()), bLockedOn ? *GetNameSafe(NewTarget) : TEXT("해제"));
 	OnTargetChanged.Broadcast(NewTarget);
@@ -360,6 +376,15 @@ void UODLockOnComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 
 	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
 	const AActor* TargetActor = Target.Get();
+	if (!IsValid(TargetActor) && bRestoringFraming)
+	{
+		if (UpdateFraming(DeltaTime))
+		{
+			bRestoringFraming = false;
+			SetComponentTickEnabled(false);
+		}
+		return;
+	}
 	if (!IsValid(OwnerPawn) || !IsValid(TargetActor))
 	{
 		ClearLockOn();
@@ -381,12 +406,61 @@ void UODLockOnComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	}
 
 	// 캐릭터에서 대상을 보는 방향으로 카메라를 돌린다. (캐릭터도 이 Yaw를 따라 대상을 바라본다)
-	FRotator Desired = (AimLocation - OwnerLocation).Rotation();
+	// 겨누는 높이는 플레이어 기준 AimMaxHeightAboveOwner까지만: 큰 보스의 몸통을 그대로 겨누면 카메라가 위를 올려다본다.
+	FVector LookAt = AimLocation;
+	LookAt.Z = FMath::Min(LookAt.Z, OwnerLocation.Z + AimMaxHeightAboveOwner);
+	FRotator Desired = (LookAt - OwnerLocation).Rotation();
 	Desired.Pitch = FMath::Clamp(FRotator::NormalizeAxis(Desired.Pitch) + CameraPitchOffset, CameraPitchRange.X, CameraPitchRange.Y);
 	Desired.Roll = 0.0f;
 
 	const FRotator Current = PC->GetControlRotation();
 	PC->SetControlRotation(CameraInterpSpeed > 0.0f ? FMath::RInterpTo(Current, Desired, DeltaTime, CameraInterpSpeed) : Desired);
+
+	UpdateFraming(DeltaTime);
+}
+
+bool UODLockOnComponent::UpdateFraming(float DeltaTime)
+{
+	USpringArmComponent* Boom = CachedBoom.Get();
+	const UODCombatModeComponent* ModeComponent = CachedModeComponent.Get();
+	const AActor* OwnerActor = GetOwner();
+	if (!IsValid(Boom) || !IsValid(ModeComponent) || !IsValid(OwnerActor))
+	{
+		return true;
+	}
+
+	// 기본값은 현재 모드 설정. 락온 중이면 대상이 멀수록·클수록 카메라를 뒤로 빼고 그만큼 올린다. (둘 다 화면에 담기게)
+	const FODCombatModeSettings& Settings = ModeComponent->GetSettings(ModeComponent->GetCombatMode());
+	float ExtraArm = 0.0f;
+	if (const AActor* TargetActor = Target.Get(); IsValid(TargetActor))
+	{
+		const float Distance = static_cast<float>(FVector::Dist2D(OwnerActor->GetActorLocation(), TargetActor->GetActorLocation()));
+		ExtraArm += FMath::Max(Distance - FramingStartDistance, 0.0f) * FramingArmPerDistance;
+
+		const ACharacter* OwnerCharacter = Cast<ACharacter>(OwnerActor);
+		const ACharacter* TargetCharacter = Cast<ACharacter>(TargetActor);
+		if (IsValid(OwnerCharacter) && IsValid(TargetCharacter))
+		{
+			const float SizeDiff = TargetCharacter->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() - OwnerCharacter->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+			ExtraArm += FMath::Max(SizeDiff, 0.0f) * FramingArmPerTargetSize;
+		}
+		ExtraArm = FMath::Min(ExtraArm, FramingMaxExtraArm);
+	}
+
+	const float DesiredArm = Settings.ArmLength + ExtraArm;
+	const FVector DesiredOffset = Settings.CameraTargetOffset + FVector(0.0, 0.0, ExtraArm * FramingHeightPerArm);
+	Boom->TargetArmLength = FMath::FInterpTo(Boom->TargetArmLength, DesiredArm, DeltaTime, FramingInterpSpeed);
+	Boom->TargetOffset = FMath::VInterpTo(Boom->TargetOffset, DesiredOffset, DeltaTime, FramingInterpSpeed);
+
+	const bool bArrived = FMath::Abs(Boom->TargetArmLength - DesiredArm) < ODLockOn::FramingArriveTolerance
+		&& FVector::DistSquared(Boom->TargetOffset, DesiredOffset) < FMath::Square(ODLockOn::FramingArriveTolerance);
+	if (bArrived && !Target.IsValid())
+	{
+		Boom->TargetArmLength = DesiredArm;
+		Boom->TargetOffset = DesiredOffset;
+		return true;
+	}
+	return false;
 }
 
 void UODLockOnComponent::HandleCharacterDeath(AODCharacterBase* DeadCharacter)
@@ -403,6 +477,9 @@ void UODLockOnComponent::HandleCombatModeChanged(EODCombatMode NewMode)
 	if (NewMode != EODCombatMode::Boss)
 	{
 		ClearLockOn();
+		// 새 모드가 카메라를 이미 자기 값으로 맞췄으므로 되돌리기를 하지 않는다.
+		bRestoringFraming = false;
+		SetComponentTickEnabled(false);
 	}
 }
 
