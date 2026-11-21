@@ -135,6 +135,10 @@ void AODPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	{
 		EIC->BindAction(ResetAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_Reset);
 	}
+	if (const UInputAction* BossDoorAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Debug_GoToBossDoor, false))
+	{
+		EIC->BindAction(BossDoorAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_GoToBossDoor);
+	}
 
 	// 상호작용 (문 등)
 	if (const UInputAction* InteractAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Interact, false))
@@ -361,6 +365,16 @@ void AODPlayerCharacter::Input_Debug_SwapWeapon()
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, FString::Printf(TEXT("[테스트] 무기: %s"), *GetNameSafe(TestWeapons[NextIndex])));
+	}
+}
+
+void AODPlayerCharacter::Input_Debug_GoToBossDoor()
+{
+	AODGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AODGameMode>() : nullptr;
+	const bool bMoved = GameMode && GameMode->TeleportPlayerToBossDoor();
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, bMoved ? TEXT("[테스트] 보스방 문 앞으로 이동") : TEXT("[테스트] 보스방 입구가 없어 이동하지 못했습니다"));
 	}
 }
 

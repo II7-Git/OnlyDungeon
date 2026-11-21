@@ -30,10 +30,11 @@ UODCombatModeComponent::UODCombatModeComponent(const FObjectInitializer& ObjectI
 	FieldSettings.FieldOfView = 90.0f;
 	FieldSettings.bShowMouseCursor = true;
 
-	// 보스: 캐릭터 뒤 3인칭
-	BossSettings.ArmLength = 400.0f;
+	// 보스: 캐릭터 뒤 약간 위에서 내려다보는 3인칭 (큰 보스를 올려다보지 않게 거리·높이를 둔다)
+	BossSettings.ArmLength = 520.0f;
+	BossSettings.CameraTargetOffset = FVector(0.0, 0.0, 70.0);
 	BossSettings.bUseControlRotation = true;
-	BossSettings.EnterPitch = -15.0f;
+	BossSettings.EnterPitch = -20.0f;
 	BossSettings.bDoCollisionTest = true;
 	BossSettings.CameraLagSpeed = 0.0f;
 	BossSettings.FieldOfView = 90.0f;
@@ -106,6 +107,7 @@ void UODCombatModeComponent::ApplyCamera(const FODCombatModeSettings& Settings, 
 	if (USpringArmComponent* Boom = Player->GetCameraBoom(); IsValid(Boom))
 	{
 		Boom->TargetArmLength = Settings.ArmLength;
+		Boom->TargetOffset = Settings.CameraTargetOffset;
 		Boom->bDoCollisionTest = Settings.bDoCollisionTest;
 		Boom->bEnableCameraLag = Settings.CameraLagSpeed > 0.0f;
 		Boom->CameraLagSpeed = Settings.CameraLagSpeed;

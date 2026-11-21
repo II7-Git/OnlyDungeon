@@ -79,6 +79,9 @@ protected:
 	/** [테스트] 월드의 모든 OD 캐릭터 상태 초기화 */
 	void Input_Debug_Reset();
 
+	/** [테스트] 보스방 문 앞으로 이동 (AODGameMode::TeleportPlayerToBossDoor) */
+	void Input_Debug_GoToBossDoor();
+
 	/** 카메라 붐 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;

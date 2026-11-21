@@ -6,6 +6,7 @@
 #include "Components/CapsuleComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
 #include "TimerManager.h"
 #include "Character/ODCharacterBase.h"
 #include "Character/ODCombatModeComponent.h"
@@ -14,6 +15,27 @@
 #include "Core/ODLogChannels.h"
 #include "World/ODBossEntrance.h"
 #include "World/ODRespawnPoint.h"
+
+namespace ODGameModeTest
+{
+	/** [테스트] 켜면 PIE·게임을 보스방 문 앞에서 시작한다. (에디터 콘솔에서 OD.Test.StartAtBossDoor 1) */
+	static TAutoConsoleVariable<bool> CVarStartAtBossDoor(
+		TEXT("OD.Test.StartAtBossDoor"),
+		false,
+		TEXT("[테스트] 1이면 플레이어를 보스방 문 앞에서 시작한다."));
+
+	/** [테스트] 콘솔에서 보스방 문 앞으로 이동 */
+	static FAutoConsoleCommandWithWorld GoToBossDoorCommand(
+		TEXT("OD.Test.GoToBossDoor"),
+		TEXT("[테스트] 플레이어를 보스방 문 앞으로 옮긴다. (F6과 같음)"),
+		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+		{
+			if (AODGameMode* GameMode = World ? World->GetAuthGameMode<AODGameMode>() : nullptr)
+			{
+				GameMode->TeleportPlayerToBossDoor();
+			}
+		}));
+}
 
 void AODGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
 {
@@ -25,13 +47,75 @@ void AODGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewP
 		Player = Character;
 		PlayerStartTransform = FTransform(FRotator(0.0f, Character->GetActorRotation().Yaw, 0.0f), Character->GetActorLocation());
 		Character->OnDeath.AddUniqueDynamic(this, &ThisClass::HandlePlayerDeath);
+
+		// [테스트] 보스방 문 앞에서 시작: 시작 모드 적용이 끝난 다음 틱에 옮긴다.
+		if (ODGameModeTest::CVarStartAtBossDoor.GetValueOnGameThread())
+		{
+			GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+			{
+				TeleportPlayerToBossDoor();
+			}));
+		}
 	}
+}
+
+bool AODGameMode::TeleportPlayerToBossDoor()
+{
+	UWorld* World = GetWorld();
+	AODCharacterBase* Character = Player.Get();
+	if (!World || !IsValid(Character))
+	{
+		return false;
+	}
+
+	// 테스트 전용 한 번 호출이라 액터 순회를 쓴다. (매 프레임 경로 아님)
+	const AODBossEntrance* Entrance = nullptr;
+	for (TActorIterator<AODBossEntrance> It(World); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			Entrance = *It;
+			break;
+		}
+	}
+	if (!Entrance)
+	{
+		UE_LOG(LogOD, Warning, TEXT("[테스트] 보스방 입구가 없어 이동하지 못했습니다."));
+		return false;
+	}
+	const FTransform EntryTransform = Entrance->GetEntryTransform();
+
+	// 문 근처 리스폰 포인트를 부활 위치로 등록한다. (보스전에서 죽으면 문 앞에서 다시 시작)
+	AODRespawnPoint* NearestPoint = nullptr;
+	double NearestDistSq = FMath::Square(static_cast<double>(BossDoorRespawnSearchRadius));
+	for (TActorIterator<AODRespawnPoint> It(World); It; ++It)
+	{
+		const double DistSq = FVector::DistSquared(It->GetActorLocation(), EntryTransform.GetLocation());
+		if (IsValid(*It) && DistSq < NearestDistSq)
+		{
+			NearestDistSq = DistSq;
+			NearestPoint = *It;
+		}
+	}
+	if (NearestPoint)
+	{
+		ActiveRespawnPoint = NearestPoint;
+	}
+
+	// 부활과 같은 경로: 예약된 부활·휴식 취소 → 보스전·입구·적 초기화 → 문 앞에 필드 모드로 세운다.
+	CancelPendingRespawn();
+	ResetWorldState();
+	RevivePlayerAt(Character, EntryTransform, EODCombatMode::Field);
+
+	UE_LOG(LogOD, Log, TEXT("[테스트] 보스방 문 앞으로 이동 (부활 위치: %s)"), NearestPoint ? *NearestPoint->GetName() : TEXT("변경 없음"));
+	return true;
 }
 
 void AODGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	GetWorldTimerManager().ClearTimer(FadeTimer);
 	GetWorldTimerManager().ClearTimer(RespawnTimer);
+	CancelRestFade();
 	if (AODCharacterBase* Character = Player.Get())
 	{
 		Character->OnDeath.RemoveDynamic(this, &ThisClass::HandlePlayerDeath);
@@ -42,6 +126,9 @@ void AODGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AODGameMode::HandlePlayerDeath(AODCharacterBase* DeadCharacter)
 {
 	UE_LOG(LogOD, Log, TEXT("플레이어 사망 → %.1f초 뒤 부활"), RespawnDelay);
+
+	// 휴식 페이드 도중 죽으면 휴식을 취소한다. (부활 페이드가 화면을 맡는다)
+	CancelRestFade();
 
 	FTimerManager& TimerManager = GetWorldTimerManager();
 	const float FadeStart = FMath::Max(RespawnDelay - FadeTime, 0.0f);
@@ -66,6 +153,7 @@ void AODGameMode::CancelPendingRespawn()
 {
 	GetWorldTimerManager().ClearTimer(FadeTimer);
 	GetWorldTimerManager().ClearTimer(RespawnTimer);
+	CancelRestFade();
 
 	const AODCharacterBase* Character = Player.Get();
 	const APlayerController* PC = IsValid(Character) ? Cast<APlayerController>(Character->GetController()) : nullptr;
@@ -151,14 +239,74 @@ void AODGameMode::RestAtRespawnPoint(AODRespawnPoint* Point, APawn* Pawn)
 		return;
 	}
 
-	ActiveRespawnPoint = Point;
+	if (bRestFadeInProgress)
+	{
+		return;
+	}
 
+	ActiveRespawnPoint = Point;
+	PendingRestCharacter = Character;
+	UE_LOG(LogOD, Log, TEXT("휴식: %s (부활 위치 등록)"), *Point->GetName());
+
+	// 화면을 어둡게 한 뒤 검은 화면에서 회복·적 초기화를 한다. 카메라가 없으면 바로 적용한다.
+	APlayerCameraManager* CameraManager = GetPlayerCameraManager();
+	if (!IsValid(CameraManager) || RestFadeOutTime + RestBlackHoldTime + RestFadeInTime <= 0.0f)
+	{
+		ApplyPendingRest();
+		return;
+	}
+
+	bRestFadeInProgress = true;
+	CameraManager->StartCameraFade(0.0f, 1.0f, RestFadeOutTime, FLinearColor::Black, false, true);
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.SetTimer(RestApplyTimer, this, &ThisClass::ApplyPendingRest, FMath::Max(RestFadeOutTime, KINDA_SMALL_NUMBER), false);
+	TimerManager.SetTimer(RestFadeInTimer, this, &ThisClass::EndRestFade, FMath::Max(RestFadeOutTime + RestBlackHoldTime, KINDA_SMALL_NUMBER), false);
+}
+
+void AODGameMode::ApplyPendingRest()
+{
 	// 휴식: 회복 + 적 초기화. 플레이어는 그 자리에 둔다. (휴식 모션이 끊기지 않도록 Revive 대신 수치만 회복)
+	AODCharacterBase* Character = PendingRestCharacter.Get();
+	PendingRestCharacter.Reset();
+	if (!IsValid(Character) || Character->IsDead())
+	{
+		return;
+	}
 	Character->RestoreVitals();
 	if (UODFieldSubsystem* Field = GetWorld() ? GetWorld()->GetSubsystem<UODFieldSubsystem>() : nullptr)
 	{
 		Field->ResetAllEnemies();
 	}
+}
 
-	UE_LOG(LogOD, Log, TEXT("휴식: %s (부활 위치 등록)"), *Point->GetName());
+void AODGameMode::EndRestFade()
+{
+	bRestFadeInProgress = false;
+	if (APlayerCameraManager* CameraManager = GetPlayerCameraManager())
+	{
+		CameraManager->StartCameraFade(1.0f, 0.0f, RestFadeInTime, FLinearColor::Black, false, false);
+	}
+}
+
+void AODGameMode::CancelRestFade()
+{
+	FTimerManager& TimerManager = GetWorldTimerManager();
+	TimerManager.ClearTimer(RestApplyTimer);
+	TimerManager.ClearTimer(RestFadeInTimer);
+	PendingRestCharacter.Reset();
+	if (bRestFadeInProgress)
+	{
+		bRestFadeInProgress = false;
+		if (APlayerCameraManager* CameraManager = GetPlayerCameraManager())
+		{
+			CameraManager->StopCameraFade();
+		}
+	}
+}
+
+APlayerCameraManager* AODGameMode::GetPlayerCameraManager() const
+{
+	const AODCharacterBase* Character = Player.Get();
+	const APlayerController* PC = IsValid(Character) ? Cast<APlayerController>(Character->GetController()) : nullptr;
+	return (PC && IsValid(PC->PlayerCameraManager)) ? PC->PlayerCameraManager.Get() : nullptr;
 }
