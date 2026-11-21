@@ -16,6 +16,7 @@
 #include "Components/GridSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/ProgressBar.h"
@@ -43,6 +44,8 @@
 #include "Core/ODGameplayTags.h"
 #include "Equipment/ODEquipmentComponent.h"
 #include "Equipment/ODWeaponData.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 
 namespace ODHUD
 {
@@ -55,6 +58,10 @@ namespace ODHUD
 	constexpr float DebugTickInterval = 0.1f;
 	constexpr float LockOnMarkerInterval = 1.0f / 60.0f;
 	constexpr float BannerTickInterval = 0.03f;
+	/** 장비 칸 아이콘 크기(px, 칸 76 - 여백) */
+	constexpr float IconSize = 66.0f;
+	/** 아이콘 UI 재질(M_OD_UIIcon)의 색·불투명도 곱 파라미터 */
+	const FName IconTintParameter(TEXT("Tint"));
 
 	FSlateFontInfo Font(int32 Size)
 	{
@@ -238,7 +245,7 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 			CanvasSlot->SetAutoSize(true);
 		}
 
-		auto AddSlot = [&](int32 Row, int32 Column, UTextBlock* Label)
+		auto AddSlot = [&](int32 Row, int32 Column, UWidget* Content)
 		{
 			USizeBox* Cell = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 			Cell->SetWidthOverride(76.0f);
@@ -250,11 +257,14 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 			Frame->SetHorizontalAlignment(HAlign_Center);
 			Frame->SetVerticalAlignment(VAlign_Center);
 			Cell->AddChild(Frame);
-			if (Label)
+			if (Content)
 			{
-				Label->SetJustification(ETextJustify::Center);
-				Label->SetAutoWrapText(true);
-				Frame->SetContent(Label);
+				if (UTextBlock* Label = Cast<UTextBlock>(Content))
+				{
+					Label->SetJustification(ETextJustify::Center);
+					Label->SetAutoWrapText(true);
+				}
+				Frame->SetContent(Content);
 			}
 
 			if (UGridSlot* GridSlot = Grid->AddChildToGrid(Cell, Row, Column))
@@ -263,10 +273,33 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 			}
 		};
 
+		// 아이콘 크기: 칸(76) - 테두리 여백
+				auto MakeIcon = [&](const TCHAR* Name)
+		{
+			UImage* Image = Tree->ConstructWidget<UImage>(UImage::StaticClass(), Name);
+			Image->SetDesiredSizeOverride(FVector2D(ODHUD::IconSize, ODHUD::IconSize));
+			Image->SetVisibility(ESlateVisibility::Collapsed);
+			return Image;
+		};
+
 		RightHandText = MakeText(Tree, 10, TextColor, TEXT("RightHandText"));
+		RightHandText->SetJustification(ETextJustify::Center);
+		RightHandText->SetAutoWrapText(true);
+		RightHandIcon = MakeIcon(TEXT("RightHandIcon"));
+		UOverlay* RightHandBox = Tree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RightHandSlot"));
+		if (UOverlaySlot* IconSlot = RightHandBox->AddChildToOverlay(RightHandIcon))
+		{
+			IconSlot->SetHorizontalAlignment(HAlign_Center);
+			IconSlot->SetVerticalAlignment(VAlign_Center);
+		}
+		if (UOverlaySlot* TextSlot = RightHandBox->AddChildToOverlay(RightHandText))
+		{
+			TextSlot->SetHorizontalAlignment(HAlign_Center);
+			TextSlot->SetVerticalAlignment(VAlign_Center);
+		}
 		AddSlot(0, 1, nullptr);
 		AddSlot(1, 0, nullptr);
-		AddSlot(1, 2, RightHandText);
+		AddSlot(1, 2, RightHandBox);
 
 		// 아래 슬롯: 회복 물약 (다크소울 에스트 병처럼 이름과 남은 개수)
 		{
@@ -285,15 +318,28 @@ void UODHUDWidget::BuildDefaultLayout(UCanvasPanel* Canvas)
 				CountSlot->SetHorizontalAlignment(HAlign_Center);
 			}
 
+			ItemIcon = MakeIcon(TEXT("ItemIcon"));
+			UOverlay* ItemOverlay = Tree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("ItemOverlay"));
+			if (UOverlaySlot* IconSlot = ItemOverlay->AddChildToOverlay(ItemIcon))
+			{
+				IconSlot->SetHorizontalAlignment(HAlign_Center);
+				IconSlot->SetVerticalAlignment(VAlign_Center);
+			}
+			if (UOverlaySlot* BoxSlot = ItemOverlay->AddChildToOverlay(ItemBox))
+			{
+				BoxSlot->SetHorizontalAlignment(HAlign_Fill);
+				BoxSlot->SetVerticalAlignment(VAlign_Fill);
+			}
+
 			USizeBox* Cell = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 			Cell->SetWidthOverride(76.0f);
 			Cell->SetHeightOverride(76.0f);
 			UBorder* Frame = Tree->ConstructWidget<UBorder>(UBorder::StaticClass());
 			Frame->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.45f));
 			Frame->SetPadding(FMargin(4.0f));
-			Frame->SetHorizontalAlignment(HAlign_Center);
-			Frame->SetVerticalAlignment(VAlign_Center);
-			Frame->SetContent(ItemBox);
+			Frame->SetHorizontalAlignment(HAlign_Fill);
+			Frame->SetVerticalAlignment(VAlign_Fill);
+			Frame->SetContent(ItemOverlay);
 			Cell->AddChild(Frame);
 			if (UGridSlot* GridSlot = Grid->AddChildToGrid(Cell, 2, 1))
 			{
@@ -644,6 +690,23 @@ void UODHUDWidget::BindPawnComponents(APawn* Pawn)
 	if (UODPotionComponent* Potion = Pawn->FindComponentByClass<UODPotionComponent>())
 	{
 		ObservedPotion = Potion;
+		const bool bHasIcon = ApplyIcon(ItemIcon, Potion->GetHudIcon());
+		if (IsValid(ItemNameText))
+		{
+			ItemNameText->SetVisibility(bHasIcon ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+		}
+		if (IsValid(ItemCountText))
+		{
+			if (UVerticalBoxSlot* CountSlot = Cast<UVerticalBoxSlot>(ItemCountText->Slot))
+			{
+				// 아이콘 위에 겹칠 때는 칸의 오른쪽 아래 구석에 둔다.
+				CountSlot->SetHorizontalAlignment(bHasIcon ? HAlign_Right : HAlign_Center);
+				CountSlot->SetVerticalAlignment(bHasIcon ? VAlign_Bottom : VAlign_Center);
+				CountSlot->SetSize(bHasIcon ? FSlateChildSize(ESlateSizeRule::Fill) : FSlateChildSize(ESlateSizeRule::Automatic));
+			}
+			ItemCountText->SetShadowOffset(FVector2D(1.0, 1.0));
+			ItemCountText->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.9f));
+		}
 		Potion->OnChargesChanged.AddUniqueDynamic(this, &ThisClass::HandlePotionChargesChanged);
 		HandlePotionChargesChanged(Potion->GetCharges(), Potion->GetMaxCharges());
 	}
@@ -712,6 +775,32 @@ void UODHUDWidget::HandlePotionChargesChanged(int32 CurrentCharges, int32 MaxCha
 	{
 		ItemNameText->SetColorAndOpacity(FSlateColor(CurrentCharges > 0 ? FLinearColor(0.85f, 0.82f, 0.75f) : FLinearColor(0.4f, 0.4f, 0.4f)));
 	}
+	if (IsValid(ItemIcon) && ItemIcon->IsVisible())
+	{
+		// UI 재질은 위젯 색을 곱하지 않으므로 재질의 Tint 파라미터로 흐리게 한다.
+		if (UMaterialInstanceDynamic* Material = ItemIcon->GetDynamicMaterial())
+		{
+			Material->SetVectorParameterValue(ODHUD::IconTintParameter, CurrentCharges > 0 ? FLinearColor::White : FLinearColor(0.35f, 0.35f, 0.35f, 0.6f));
+		}
+	}
+}
+
+bool UODHUDWidget::ApplyIcon(UImage* Image, const TSoftObjectPtr<UMaterialInterface>& Icon) const
+{
+	if (!IsValid(Image))
+	{
+		return false;
+	}
+	UMaterialInterface* Material = Icon.IsNull() ? nullptr : Icon.LoadSynchronous();
+	if (!IsValid(Material))
+	{
+		Image->SetVisibility(ESlateVisibility::Collapsed);
+		return false;
+	}
+	Image->SetBrushFromMaterial(Material);
+	Image->SetDesiredSizeOverride(FVector2D(ODHUD::IconSize, ODHUD::IconSize));
+	Image->SetVisibility(ESlateVisibility::HitTestInvisible);
+	return true;
 }
 
 void UODHUDWidget::HandleLockOnTargetChanged(AActor* NewTarget)
@@ -1076,6 +1165,15 @@ void UODHUDWidget::RefreshDebugInfo()
 				WeaponName = !WeaponData->DisplayName.IsEmpty() ? WeaponData->DisplayName : FText::FromString(WeaponData->GetName());
 			}
 			RightHandText->SetText(WeaponName);
+		}
+		const bool bHasIcon = IsValid(WeaponData) && ApplyIcon(RightHandIcon, WeaponData->HudIcon);
+		if (!IsValid(WeaponData) && IsValid(RightHandIcon))
+		{
+			RightHandIcon->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		if (IsValid(RightHandText))
+		{
+			RightHandText->SetVisibility(bHasIcon ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 		}
 	}
 

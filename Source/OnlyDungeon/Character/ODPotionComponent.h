@@ -6,6 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "ODPotionComponent.generated.h"
 
+class UMaterialInterface;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FODPotionChargesChangedSignature, int32, CurrentCharges, int32, MaxCharges);
 
 /**
@@ -28,6 +30,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Potion")
 	int32 GetMaxCharges() const { return MaxCharges; }
+
+	/** HUD 아이템 칸에 보일 물약 아이콘 (UI 재질). 비우면 이름 글자만 보인다. */
+	const TSoftObjectPtr<UMaterialInterface>& GetHudIcon() const { return HudIcon; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "OD|Potion")
 	bool HasCharges() const { return CurrentCharges > 0; }
@@ -52,6 +57,10 @@ protected:
 	/** 최대 개수 (처음부터 들고 있는 개수) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Potion", meta = (ClampMin = "0"))
 	int32 MaxCharges = 5;
+
+	/** HUD 아이템 칸 아이콘 (Tools/UI/build_item_icons.py가 물약 병 메시를 찍어 만든다) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Potion|UI")
+	TSoftObjectPtr<UMaterialInterface> HudIcon;
 
 	/** 하나당 회복량 (최대 체력 대비) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Potion", meta = (ClampMin = "0.0", ClampMax = "1.0"))

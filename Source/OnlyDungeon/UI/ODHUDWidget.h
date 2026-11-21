@@ -20,6 +20,8 @@ class UGameplayAbility;
 class UProgressBar;
 class USizeBox;
 class UTextBlock;
+class UImage;
+class UMaterialInterface;
 class UWidget;
 struct FGameplayEventData;
 
@@ -88,6 +90,14 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> RightHandText;
+
+	/** 오른손 칸: 무기 아이콘 (무기 데이터의 HudIcon. 없으면 이름 글자를 보인다) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> RightHandIcon;
+
+	/** 아래 칸: 물약 아이콘 (물약 컴포넌트의 HudIcon. 다 쓰면 흐리게) */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> ItemIcon;
 
 	/** 아래 슬롯: 회복 물약 이름 */
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -218,6 +228,12 @@ private:
 
 	UFUNCTION()
 	void HandlePotionChargesChanged(int32 CurrentCharges, int32 MaxCharges);
+
+	/**
+	 * 아이콘 이미지에 UI 재질을 넣는다. (무기를 바꾸거나 물약 컴포넌트를 처음 잡을 때만 불리므로 동기 로드한다)
+	 * @return 아이콘이 있어 보이게 했으면 true, 없으면 이미지를 숨기고 false
+	 */
+	bool ApplyIcon(UImage* Image, const TSoftObjectPtr<UMaterialInterface>& Icon) const;
 
 	UFUNCTION()
 	void HandleBossEncounterStarted(AODEnemyCharacter* Boss);
