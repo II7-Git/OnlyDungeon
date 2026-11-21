@@ -13,6 +13,7 @@
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
 #include "AbilitySystem/ODAbilitySystemComponent.h"
+#include "AbilitySystem/Abilities/ODGameplayAbility_SwapWeapon.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
 #include "Equipment/ODEquipmentComponent.h"
@@ -360,12 +361,30 @@ void AODPlayerCharacter::Input_Debug_SwapWeapon()
 
 	const int32 CurrentIndex = TestWeapons.IndexOfByKey(EquipmentComponent->GetWeaponData());
 	const int32 NextIndex = (CurrentIndex + 1) % TestWeapons.Num();
-	EquipmentComponent->EquipWeapon(TestWeapons[NextIndex]);
+	UODWeaponData* NextWeapon = TestWeapons[NextIndex];
 
-	if (GEngine)
+	// 무기 교체 어빌리티가 있으면 넣었다 꺼내는 모션으로 바꾼다. (발동 조건·중복 실행은 어빌리티가 막는다)
+	// 어빌리티가 있는데 막혀서 발동하지 않은 경우(물약·회피 중 등)에는 바로 바꾸지 않고 무시한다.
+	if (IsValid(AbilitySystemComponent))
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, FString::Printf(TEXT("[테스트] 무기: %s"), *GetNameSafe(TestWeapons[NextIndex])));
+		const bool bHasSwapAbility = AbilitySystemComponent->GetActivatableAbilities().ContainsByPredicate([](const FGameplayAbilitySpec& Spec)
+		{
+			return Spec.Ability && Spec.Ability->IsA<UODGameplayAbility_SwapWeapon>();
+		});
+		if (bHasSwapAbility)
+		{
+			FGameplayEventData Payload;
+			Payload.EventTag = ODGameplayTags::Event_Weapon_SwapRequest;
+			Payload.Instigator = this;
+			Payload.OptionalObject = NextWeapon;
+			AbilitySystemComponent->HandleGameplayEvent(ODGameplayTags::Event_Weapon_SwapRequest, &Payload);
+			return;
+		}
 	}
+
+	// 어빌리티가 없으면 바로 바꾼다.
+	EquipmentComponent->EquipWeapon(NextWeapon);
+	UE_LOG(LogOD, Log, TEXT("무기 즉시 교체: %s"), *GetNameSafe(NextWeapon));
 }
 
 void AODPlayerCharacter::Input_Debug_GoToBossDoor()
