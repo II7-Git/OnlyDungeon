@@ -9,6 +9,9 @@
 #include "Core/ODGameplayTags.h"
 #include "Equipment/ODEquipmentComponent.h"
 #include "Equipment/ODWeaponActor.h"
+#include "Equipment/ODWeaponData.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 namespace
 {
@@ -43,6 +46,8 @@ void UODAnimNotifyState_WeaponTrace::NotifyBegin(USkeletalMeshComponent* MeshCom
 
 	if (AODWeaponActor* Weapon = FindWeapon(MeshComp))
 	{
+		PlaySwingSound(Weapon);
+
 		// 필드(쿼터뷰): 다수의 적을 상대하므로 칼날 스윕 대신 전방 부채꼴 판정 1회
 		if (IsValid(ASC) && ASC->HasMatchingGameplayTag(ODGameplayTags::Mode_Field))
 		{
@@ -79,6 +84,19 @@ void UODAnimNotifyState_WeaponTrace::NotifyEnd(USkeletalMeshComponent* MeshComp,
 FString UODAnimNotifyState_WeaponTrace::GetNotifyName_Implementation() const
 {
 	return TEXT("WeaponTrace");
+}
+
+void UODAnimNotifyState_WeaponTrace::PlaySwingSound(AODWeaponActor* Weapon)
+{
+	const AActor* Owner = Weapon->GetOwner();
+	const AODCharacterBase* OwnerCharacter = Cast<AODCharacterBase>(Owner);
+	const UODEquipmentComponent* Equipment = OwnerCharacter ? OwnerCharacter->GetEquipmentComponent() : nullptr;
+	const UODWeaponData* Data = IsValid(Equipment) ? Equipment->GetWeaponData() : nullptr;
+	if (IsValid(Data) && IsValid(Data->SwingSound) && IsValid(Weapon->GetMeshComponent()))
+	{
+		// 무기에 붙여 재생해 칼끝이 움직이는 방향에서 소리가 난다. 무기가 사라지면 함께 멈춘다.
+		UGameplayStatics::SpawnSoundAttached(Data->SwingSound, Weapon->GetMeshComponent(), NAME_None, FVector::ZeroVector, EAttachLocation::KeepRelativeOffset, true);
+	}
 }
 
 AODWeaponActor* UODAnimNotifyState_WeaponTrace::FindWeapon(const USkeletalMeshComponent* MeshComp)

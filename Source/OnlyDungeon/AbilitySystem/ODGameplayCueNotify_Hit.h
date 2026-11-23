@@ -7,7 +7,7 @@
 #include "ODGameplayCueNotify_Hit.generated.h"
 
 /**
- * 근접 공격에 맞았을 때의 이펙트 (GameplayCue.Hit). 피해 GE(GE_Damage_Melee)가 실행될 때 맞은 캐릭터에서 실행된다.
+ * 근접 공격에 맞았을 때의 이펙트와 소리 (GameplayCue.Hit). 피해 GE(GE_Damage_Melee)가 실행될 때 맞은 캐릭터에서 실행된다.
  * - 어떤 이펙트를 낼지는 맞은 캐릭터가 정한다(AODCharacterBase::HitImpactEffect). 사람·해골은 피, 골렘은 불꽃 스파크처럼 재질에 맞게.
  * - 위치·방향은 피해 GE 컨텍스트의 적중 정보(무기 판정 HitResult)를 쓴다. 이펙트는 공격자 반대 방향(맞아서 튀는 방향)을 향한다.
  * - 패링 중에 받은 공격은 피해가 없으므로 내지 않는다.

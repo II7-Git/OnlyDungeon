@@ -15,6 +15,7 @@ class UODAttributeSet_Combat;
 class UODAbilitySet;
 class UODEquipmentComponent;
 class UNiagaraSystem;
+class USoundBase;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODOnCharacterDeathSignature, AODCharacterBase*, DeadCharacter);
 
@@ -60,6 +61,7 @@ public:
 
 	UNiagaraSystem* GetHitImpactEffect() const { return HitImpactEffect; }
 	float GetHitImpactScale() const { return HitImpactScale; }
+	USoundBase* GetHitImpactSound() const { return HitImpactSound; }
 
 	//~ IGenericTeamAgentInterface
 	virtual FGenericTeamId GetGenericTeamId() const override { return FGenericTeamId(TeamId); }
@@ -130,6 +132,13 @@ protected:
 	/** 피격 이펙트 크기 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character|Hit", meta = (ClampMin = "0.01"))
 	float HitImpactScale = 1.0f;
+
+	/**
+	 * 근접 공격에 맞았을 때 맞은 지점에서 낼 소리 (구울은 살점, 골렘은 돌·금속 등 몸 재질에 맞춘다). GameplayCue.Hit가 재생한다.
+	 * 여러 소리를 번갈아 내려면 SoundCue(Random 노드)를 지정하고, 거리 감쇠·동시 재생 제한은 사운드 에셋 쪽에서 정한다.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character|Hit")
+	TObjectPtr<USoundBase> HitImpactSound;
 
 	/** 시작할 때 부여할 기본 어빌리티·이펙트 세트 (초기 수치 GE 포함) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Ability")

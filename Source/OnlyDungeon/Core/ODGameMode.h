@@ -9,6 +9,7 @@
 
 class AODCharacterBase;
 class AODRespawnPoint;
+class UODAudioSet;
 class APlayerCameraManager;
 
 /**
@@ -25,6 +26,9 @@ class ONLYDUNGEON_API AODGameMode : public AGameModeBase
 
 public:
 	EODCombatMode GetInitialCombatMode() const { return InitialCombatMode; }
+
+	/** 이 레벨의 배경음·환경음 세트 (UODAudioDirectorSubsystem이 읽는다) */
+	const TSoftObjectPtr<UODAudioSet>& GetAudioSet() const { return AudioSet; }
 
 	/**
 	 * 리스폰 포인트에서 휴식: 부활 위치 등록, 플레이어 회복, 적 전체 초기화.
@@ -57,6 +61,10 @@ protected:
 	/** 레벨 시작 시 플레이어의 전투 모드 (필드 = 쿼터뷰, 보스 = 3인칭) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Mode")
 	EODCombatMode InitialCombatMode = EODCombatMode::Field;
+
+	/** 배경음·환경음 세트. 비어 있으면 배경음 없이 진행한다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Audio")
+	TSoftObjectPtr<UODAudioSet> AudioSet;
 
 	/** 사망 후 부활까지 걸리는 시간(초) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Respawn", meta = (ClampMin = "0.5"))

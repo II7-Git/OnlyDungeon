@@ -8,6 +8,7 @@
 
 class UAnimMontage;
 class UCameraShakeBase;
+class USoundBase;
 class UNiagaraSystem;
 
 /**
@@ -65,6 +66,10 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Roar|Effect", meta = (ClampMin = "0.01"))
 	float RoarEffectScale = 1.0f;
+
+	/** 포효 소리. EffectDelay에 이펙트와 함께 RoarEffectSocket(없으면 메시 중심)에 붙여 재생한다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Roar|Effect")
+	TObjectPtr<USoundBase> RoarSound;
 
 	/** 반복형 이펙트를 이 시간 뒤에 멈춘다. (0이면 이펙트가 알아서 끝남) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Roar|Effect", meta = (ClampMin = "0.0", Units = "s"))
