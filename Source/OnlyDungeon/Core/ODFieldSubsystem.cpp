@@ -3,6 +3,7 @@
 #include "ODFieldSubsystem.h"
 
 #include "Character/ODEnemyCharacter.h"
+#include "Core/ODBossEncounterSubsystem.h"
 #include "Core/ODLogChannels.h"
 
 bool UODFieldSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
@@ -29,13 +30,23 @@ void UODFieldSubsystem::ResetAllEnemies()
 {
 	AttackTokenHolders.Reset();
 
+	// 처치한 보스는 부활·휴식으로 되살리지 않는다. (기획서 2장)
+	const UWorld* World = GetWorld();
+	const UODBossEncounterSubsystem* Encounter = World ? World->GetSubsystem<UODBossEncounterSubsystem>() : nullptr;
+
 	// 초기화 도중 등록이 바뀌어도 안전하게 복사본으로 돈다.
 	const TArray<AODEnemyCharacter*> Snapshot = GetEnemies();
+	int32 ResetCount = 0;
 	for (AODEnemyCharacter* Enemy : Snapshot)
 	{
+		if (Encounter && Encounter->IsBossDefeated(Enemy))
+		{
+			continue;
+		}
 		Enemy->ResetToSpawn();
+		++ResetCount;
 	}
-	UE_LOG(LogOD, Log, TEXT("적 전체 초기화: %d"), Snapshot.Num());
+	UE_LOG(LogOD, Log, TEXT("적 전체 초기화: %d (처치한 보스 %d 제외)"), ResetCount, Snapshot.Num() - ResetCount);
 }
 
 void UODFieldSubsystem::AlertNearbyEnemies(AODEnemyCharacter* Source, AODCharacterBase* Target, float Radius)

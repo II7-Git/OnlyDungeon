@@ -404,7 +404,7 @@ void AODPlayerCharacter::Input_Debug_Reset()
 	{
 		GameMode->CancelPendingRespawn();
 		ResetForTest();
-		GameMode->ResetWorldState();
+		GameMode->ResetWorldState(true);
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[테스트] 모든 캐릭터 상태 초기화"));

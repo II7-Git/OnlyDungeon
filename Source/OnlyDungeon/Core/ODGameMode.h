@@ -40,8 +40,11 @@ public:
 	/** 마지막으로 휴식한 리스폰 포인트 (없으면 nullptr → 시작 위치에서 부활) */
 	AODRespawnPoint* GetActiveRespawnPoint() const { return ActiveRespawnPoint.Get(); }
 
-	/** 보스전·적·보스방 입구를 처음 상태로 되돌린다. (부활, 테스트 초기화) */
-	void ResetWorldState();
+	/**
+	 * 보스전·적·보스방 입구를 처음 상태로 되돌린다. (부활, 테스트 초기화)
+	 * @param bForgetDefeatedBosses true면 보스 처치 기록까지 지워 처치한 보스도 되살린다. (F5·보스방 문 앞 이동 같은 테스트용)
+	 */
+	void ResetWorldState(bool bForgetDefeatedBosses = false);
 
 	/** 예약된 부활을 취소한다. (테스트 초기화로 이미 되살린 경우) */
 	void CancelPendingRespawn();

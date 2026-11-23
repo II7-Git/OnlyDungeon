@@ -105,7 +105,7 @@ bool AODGameMode::TeleportPlayerToBossDoor()
 
 	// 부활과 같은 경로: 예약된 부활·휴식 취소 → 보스전·입구·적 초기화 → 문 앞에 필드 모드로 세운다.
 	CancelPendingRespawn();
-	ResetWorldState();
+	ResetWorldState(true);
 	RevivePlayerAt(Character, EntryTransform, EODCombatMode::Field);
 
 	UE_LOG(LogOD, Log, TEXT("[테스트] 보스방 문 앞으로 이동 (부활 위치: %s)"), NearestPoint ? *NearestPoint->GetName() : TEXT("변경 없음"));
@@ -169,12 +169,21 @@ void AODGameMode::CancelPendingRespawn()
 	}
 }
 
-void AODGameMode::ResetWorldState()
+void AODGameMode::ResetWorldState(bool bForgetDefeatedBosses)
 {
 	UWorld* World = GetWorld();
 	if (!World)
 	{
 		return;
+	}
+
+	// 0) 테스트 전체 초기화: 처치한 보스도 다시 싸울 수 있게 기록을 지운다. (입구·적 초기화보다 먼저)
+	if (bForgetDefeatedBosses)
+	{
+		if (UODBossEncounterSubsystem* Encounter = World->GetSubsystem<UODBossEncounterSubsystem>())
+		{
+			Encounter->ForgetDefeatedBosses();
+		}
 	}
 
 	// 1) 보스전 패배 처리 (보스는 대기 상태로)
