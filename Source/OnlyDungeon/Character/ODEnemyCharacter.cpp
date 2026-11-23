@@ -23,6 +23,8 @@
 #include "Core/ODBossEncounterSubsystem.h"
 #include "Core/ODLogChannels.h"
 #include "Engine/World.h"
+#include "NavigationData.h"
+#include "NavigationSystem.h"
 
 namespace
 {
@@ -39,6 +41,12 @@ namespace
 
 	/** 귀환 중 시작 위치에서 이 거리 안에 들어오면 귀환을 마친 것으로 본다. */
 	constexpr float ReturnHomeArrivalDistance = 200.0f;
+
+	/** 감지 범위 안의 플레이어까지 길을 다시 검사하는 간격 (길찾기는 비싸므로 AI 틱마다 하지 않는다) */
+	constexpr double AggroPathCheckInterval = 0.5;
+
+	/** 길찾기 비용 상한 여유. 비용은 길이와 거의 같지만 지형 비용 차이를 흡수하도록 조금 넉넉히 둔다. */
+	constexpr double AggroPathCostSlack = 1.2;
 }
 
 AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer)
@@ -311,7 +319,8 @@ AActor* AODEnemyCharacter::UpdateCombatTarget()
 	AODCharacterBase* PlayerCharacter = Cast<AODCharacterBase>(UGameplayStatics::GetPlayerPawn(this, 0));
 	if (IsValid(PlayerCharacter) && !PlayerCharacter->IsDead() && IsHostileTo(PlayerCharacter)
 		&& FVector::Dist2D(GetActorLocation(), PlayerCharacter->GetActorLocation()) <= AggroRange
-		&& FVector::Dist2D(PlayerCharacter->GetActorLocation(), GetSpawnLocation()) <= LeashRange)
+		&& FVector::Dist2D(PlayerCharacter->GetActorLocation(), GetSpawnLocation()) <= LeashRange
+		&& IsWithinAggroPath(PlayerCharacter))
 	{
 		CombatTarget = PlayerCharacter;
 		StartEliteEncounter();
@@ -325,6 +334,39 @@ AActor* AODEnemyCharacter::UpdateCombatTarget()
 		}
 	}
 	return GetCombatTarget();
+}
+
+bool AODEnemyCharacter::IsWithinAggroPath(const AActor* Target)
+{
+	if (AggroMaxPathRatio <= 0.0f || !IsValid(Target))
+	{
+		return true;
+	}
+
+	// 길찾기는 비싸므로 검사 사이에 간격을 둔다. 통과하면 바로 대상을 잡으므로, 간격은 길이 먼 플레이어를 다시 검사할 때만 영향을 준다.
+	UWorld* World = GetWorld();
+	if (!World || World->GetTimeSeconds() < NextAggroPathCheckTime)
+	{
+		return false;
+	}
+	NextAggroPathCheckTime = World->GetTimeSeconds() + AggroPathCheckInterval;
+
+	UNavigationSystemV1* NavSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	const ANavigationData* NavData = NavSystem ? NavSystem->GetNavDataForProps(GetNavAgentPropertiesRef(), GetNavAgentLocation()) : nullptr;
+	if (!NavData)
+	{
+		// 내비 메시가 없는 맵(테스트 맵 등)은 예전처럼 직선거리만 본다.
+		return true;
+	}
+
+	const double MaxPathLength = AggroRange * AggroMaxPathRatio;
+	FPathFindingQuery Query(this, *NavData, GetNavAgentLocation(), Target->GetActorLocation(), nullptr, nullptr, MaxPathLength * AggroPathCostSlack);
+	Query.SetAllowPartialPaths(false);
+	const FPathFindingResult Result = NavSystem->FindPathSync(Query);
+	const bool bReachable = Result.IsSuccessful() && Result.Path.IsValid() && !Result.IsPartial() && Result.Path->GetLength() <= MaxPathLength;
+	UE_LOG(LogODAI, Verbose, TEXT("%s 감지 길 검사: %s (%.0fcm, 한도 %.0fcm)"), *GetName(), bReachable ? TEXT("통과") : TEXT("멀거나 막힘"),
+		Result.Path.IsValid() ? Result.Path->GetLength() : -1.0, MaxPathLength);
+	return bReachable;
 }
 
 bool AODEnemyCharacter::ReceiveAlert(AODCharacterBase* Target)

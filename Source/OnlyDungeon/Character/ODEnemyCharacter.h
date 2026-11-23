@@ -165,6 +165,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|AI", meta = (ClampMin = "0.0", Units = "cm"))
 	float AggroRange = 1200.0f;
 
+	/**
+	 * 감지 범위 안이라도 걸어서 가는 길이가 AggroRange × 이 값보다 길면 잡지 않는다. (0이면 검사 안 함)
+	 * 숲길처럼 나무·벽으로 나뉜 옆 길의 플레이어를 직선거리로 감지해 먼 길을 돌아 뛰어가는 것을 막는다.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|AI", meta = (ClampMin = "0.0"))
+	float AggroMaxPathRatio = 1.6f;
+
 	/** 시작 위치에서 이 거리 이상 멀어지면 대상을 놓고 돌아간다. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|Enemy|AI", meta = (ClampMin = "0.0", Units = "cm"))
 	float LeashRange = 2500.0f;
@@ -269,6 +276,12 @@ private:
 
 	/** 이름표를 보일지 다시 판단한다. (주기 타이머, 사망·부활 시) */
 	void RefreshNameplate();
+
+	/** 플레이어까지 걸어서 갈 수 있고 길이가 AggroRange × AggroMaxPathRatio 이내인지 (길찾기 실패·부분 경로면 false) */
+	bool IsWithinAggroPath(const AActor* Target);
+
+	/** 다음 길 검사 시각. 감지 범위에 있지만 길이 먼 플레이어를 매 AI 틱마다 길찾기하지 않도록 간격을 둔다. */
+	double NextAggroPathCheckTime = 0.0;
 
 	FTimerHandle NameplateTimer;
 
