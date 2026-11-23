@@ -10,6 +10,7 @@
 #include "TimerManager.h"
 #include "Character/ODCharacterBase.h"
 #include "Character/ODCombatModeComponent.h"
+#include "Core/ODAudioDirectorSubsystem.h"
 #include "Core/ODBossEncounterSubsystem.h"
 #include "Core/ODFieldSubsystem.h"
 #include "Core/ODLogChannels.h"
@@ -130,6 +131,11 @@ void AODGameMode::HandlePlayerDeath(AODCharacterBase* DeadCharacter)
 	// 휴식 페이드 도중 죽으면 휴식을 취소한다. (부활 페이드가 화면을 맡는다)
 	CancelRestFade();
 
+	if (UODAudioDirectorSubsystem* Audio = GetWorld() ? GetWorld()->GetSubsystem<UODAudioDirectorSubsystem>() : nullptr)
+	{
+		Audio->NotifyPlayerDied();
+	}
+
 	FTimerManager& TimerManager = GetWorldTimerManager();
 	const float FadeStart = FMath::Max(RespawnDelay - FadeTime, 0.0f);
 	if (FadeTime > 0.0f)
@@ -207,6 +213,11 @@ void AODGameMode::RespawnPlayer()
 	const FTransform Transform = IsValid(Point) ? Point->GetRespawnTransform() : PlayerStartTransform;
 	const EODCombatMode Mode = IsValid(Point) ? Point->GetRespawnCombatMode() : InitialCombatMode;
 	RevivePlayerAt(Character, Transform, Mode);
+
+	if (UODAudioDirectorSubsystem* Audio = GetWorld() ? GetWorld()->GetSubsystem<UODAudioDirectorSubsystem>() : nullptr)
+	{
+		Audio->NotifyPlayerRevived();
+	}
 
 	if (const APlayerController* PC = Cast<APlayerController>(Character->GetController()); PC && IsValid(PC->PlayerCameraManager))
 	{

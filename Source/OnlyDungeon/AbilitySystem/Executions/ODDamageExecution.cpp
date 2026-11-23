@@ -108,6 +108,7 @@ void UODDamageExecution::Execute_Implementation(const FGameplayEffectCustomExecu
 	{
 		UE_LOG(LogODCombat, Log, TEXT("패링 성공: %s ← %s"), *GetNameSafe(TargetActor), *GetNameSafe(SourceActor));
 		SendEvent(TargetASC, ODGameplayTags::Event_ParrySuccess, SourceActor, TargetActor);
+		TargetASC->ExecuteGameplayCue(ODGameplayTags::GameplayCue_Parry, Spec.GetEffectContext());
 		// Magnitude 1 = 패링당함 (경직 어빌리티가 긴 경직 몽타주를 고른다)
 		SendEvent(SourceASC, ODGameplayTags::Event_PoiseBroken, TargetActor, SourceActor, 1.0f);
 		return;
@@ -145,6 +146,7 @@ void UODDamageExecution::Execute_Implementation(const FGameplayEffectCustomExecu
 			FinalPoiseDamage = 0.0f;
 			OutExecutionOutput.AddOutputModifier(FGameplayModifierEvaluatedData(UODAttributeSet_Combat::GetStaminaAttribute(), EGameplayModOp::Additive, -StaminaCost));
 			SendEvent(TargetASC, ODGameplayTags::Event_GuardBlocked, SourceActor, TargetActor, StaminaCost);
+			TargetASC->ExecuteGameplayCue(ODGameplayTags::GameplayCue_GuardBlock, Spec.GetEffectContext());
 			UE_LOG(LogODCombat, Log, TEXT("가드: %s (피해 %.1f, 스태미나 -%.1f)"), *GetNameSafe(TargetActor), FinalDamage, StaminaCost);
 		}
 		else

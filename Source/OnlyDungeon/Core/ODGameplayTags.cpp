@@ -74,6 +74,8 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Rest, "Event.Rest", "세이브 포인트에서 휴식 시작 (OptionalObject = 세이브 포인트)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Weapon_SwapRequest, "Event.Weapon.SwapRequest", "무기 교체 요청 (Tab, OptionalObject = 꺼낼 무기 데이터)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Hit, "GameplayCue.Hit", "근접 공격 피격 이펙트 (피해 GE 실행 시, 맞은 캐릭터의 HitImpactEffect)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_Parry, "GameplayCue.Parry", "패링 성공 연출 (막은 캐릭터에서 실행, 금속 충돌음 등)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GameplayCue_GuardBlock, "GameplayCue.GuardBlock", "가드로 막음 연출 (막은 캐릭터에서 실행, 금속 충돌음 등)");
 
 	// ---------- 무기 종류 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Type_OneHandSword, "Weapon.Type.OneHandSword", "한손검");

@@ -11,6 +11,7 @@
 #include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
+#include "Sound/SoundBase.h"
 #include "TimerManager.h"
 #include "Character/ODCharacterBase.h"
 #include "Core/ODGameplayTags.h"
@@ -77,6 +78,12 @@ void UODGameplayAbility_Roar::PlayRoarEffects()
 	if (CameraShakeClass)
 	{
 		UGameplayStatics::PlayWorldCameraShake(Character, CameraShakeClass, Character->GetActorLocation(), 0.0f, CameraShakeRadius, 1.0f, false);
+	}
+
+	if (IsValid(RoarSound) && IsValid(Character->GetMesh()))
+	{
+		// 몸에 붙여 재생해 보스가 움직여도 소리가 따라간다. 포효 도중 죽어 메시가 사라지면 함께 멈춘다.
+		UGameplayStatics::SpawnSoundAttached(RoarSound, Character->GetMesh(), RoarEffectSocket, FVector::ZeroVector, EAttachLocation::SnapToTarget, true);
 	}
 
 	if (IsValid(RoarEffect) && IsValid(Character->GetMesh()))

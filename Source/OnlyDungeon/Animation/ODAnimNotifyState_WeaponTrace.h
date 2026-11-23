@@ -27,4 +27,7 @@ public:
 
 private:
 	static AODWeaponActor* FindWeapon(const USkeletalMeshComponent* MeshComp);
+
+	/** 무기 데이터의 휘두르는 소리를 무기에 붙여 재생한다. (없으면 아무것도 안 함) */
+	static void PlaySwingSound(AODWeaponActor* Weapon);
 };

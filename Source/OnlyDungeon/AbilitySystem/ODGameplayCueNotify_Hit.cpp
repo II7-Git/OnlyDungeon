@@ -9,6 +9,8 @@
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "NiagaraSystem.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 #include "Character/ODCharacterBase.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
@@ -16,7 +18,7 @@
 bool UODGameplayCueNotify_Hit::OnExecute_Implementation(AActor* MyTarget, const FGameplayCueParameters& Parameters) const
 {
 	const AODCharacterBase* Character = Cast<AODCharacterBase>(MyTarget);
-	if (!IsValid(Character) || !IsValid(Character->GetHitImpactEffect()))
+	if (!IsValid(Character) || (!IsValid(Character->GetHitImpactEffect()) && !IsValid(Character->GetHitImpactSound())))
 	{
 		return false;
 	}
@@ -46,6 +48,16 @@ bool UODGameplayCueNotify_Hit::OnExecute_Implementation(AActor* MyTarget, const 
 		Direction = FVector::UpVector;
 	}
 
+	// 소리: 거리 감쇠·동시 재생 제한은 사운드 에셋에 지정된 설정을 따른다.
+	if (USoundBase* Sound = Character->GetHitImpactSound(); IsValid(Sound))
+	{
+		UGameplayStatics::PlaySoundAtLocation(MyTarget, Sound, Location);
+	}
+
+	if (!IsValid(Character->GetHitImpactEffect()))
+	{
+		return true;
+	}
 	UNiagaraComponent* Effect = UNiagaraFunctionLibrary::SpawnSystemAtLocation(MyTarget, Character->GetHitImpactEffect(), Location, Direction.Rotation(), FVector(Character->GetHitImpactScale()));
 
 	// 반복 재생용으로 만들어진 이펙트(스파크 팩 등)도 한 번 튀고 끝나도록, 짧게 뿜은 뒤 새 입자 생성을 멈춘다.

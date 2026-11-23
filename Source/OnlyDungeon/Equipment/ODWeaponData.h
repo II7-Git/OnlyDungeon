@@ -12,6 +12,7 @@ class UAnimInstance;
 class UODAbilitySet;
 class UStaticMesh;
 class UMaterialInterface;
+class USoundBase;
 
 /**
  * 무기 하나를 정의하는 데이터 에셋. 에셋 접두사: DA_Weapon_ (예: DA_Weapon_OneHandSword)
@@ -132,4 +133,11 @@ public:
 	/** 필드 모드 범위 판정: 캐릭터 정면 기준 좌우 각도 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Field", meta = (ClampMin = "5.0", ClampMax = "180.0", Units = "deg"))
 	float FieldHitHalfAngle = 60.0f;
+
+	/**
+	 * 휘두르는 소리. 공격 모션의 무기 판정 구간이 시작될 때(UODAnimNotifyState_WeaponTrace) 무기에 붙여 한 번 재생한다.
+	 * 공격 몽타주마다 노티파이를 따로 달지 않아도 모든 공격에 소리가 난다. 여러 소리를 번갈아 내려면 SoundCue(Random 노드)를 지정한다.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Audio")
+	TObjectPtr<USoundBase> SwingSound;
 };
