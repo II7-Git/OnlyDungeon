@@ -59,6 +59,9 @@ public:
 	/** 사망·부활·귀환 때 쿨타임·간격·순번을 처음 상태로 */
 	void ResetCombatState();
 
+	/** 소유 적의 상태 태그(페이즈 등)가 바뀐 뒤 호출. 조건이 새로 갖춰진 bUseOnceWhenTagsGained 패턴을 바로 쓰도록 걸어 둔다. */
+	void HandleOwnerTagsChanged();
+
 	/** 공격 순번을 갖고 있는지 */
 	bool IsHoldingAttackToken() const { return bHoldingToken; }
 
@@ -74,6 +77,13 @@ private:
 	double GetNow() const;
 	bool IsPatternUsable(const FODCombatPattern& Pattern, int32 Index, float Distance, bool bPunish, float ApproachSlack) const;
 	void ReleaseToken();
+	bool HasRequiredTags(const FODCombatPattern& Pattern) const;
+
+	/** 다음 공격으로 바로 쓸 패턴 (bUseOnceWhenTagsGained). 패턴 수가 적어 인덱스별 배열로 둔다. */
+	TArray<bool> ForcedPending;
+
+	/** 패턴별로 RequiredTags가 지난번에 갖춰져 있었는지 (새로 갖춰진 순간을 찾기 위해) */
+	TArray<bool> RequiredTagsMet;
 
 	/** 패턴별로 다시 쓸 수 있게 되는 월드 시각 */
 	TArray<double> PatternReadyTime;

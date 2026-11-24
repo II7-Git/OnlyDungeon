@@ -65,6 +65,8 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_StaminaCost, "Data.StaminaCost", "SetByCaller: 이번 틱의 스태미나 변화량 (소모는 음수, 달리기)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Data_Heal, "Data.Heal", "SetByCaller: 이번 회복 틱의 체력 회복량 (물약)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Item, "Ability.Item", "아이템 사용 어빌리티 (물약 등). 행동(Ability.Action)과 구분");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Boss_Fireball, "Ability.Boss.Fireball", "보스가 몸의 불꽃을 모았다가 쏘는 불꽃 투사체 패턴");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Damage_Unparryable, "Damage.Unparryable", "패링으로 막을 수 없는 피해 (투사체·폭발 등). 방어는 그대로 적용");
 
 	// ---------- 쿨다운 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Cooldown_Skill_1, "Cooldown.Skill.1", "스킬 1 쿨다운");

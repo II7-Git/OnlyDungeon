@@ -71,16 +71,18 @@ bool UODEnemyCombatComponent::IsPatternUsable(const FODCombatPattern& Pattern, i
 	{
 		return false;
 	}
-	if (!Pattern.RequiredTags.IsEmpty())
+	return HasRequiredTags(Pattern);
+}
+
+bool UODEnemyCombatComponent::HasRequiredTags(const FODCombatPattern& Pattern) const
+{
+	if (Pattern.RequiredTags.IsEmpty())
 	{
-		const AODEnemyCharacter* Enemy = GetEnemy();
-		const UAbilitySystemComponent* ASC = IsValid(Enemy) ? Enemy->GetODAbilitySystemComponent() : nullptr;
-		if (!IsValid(ASC) || !ASC->HasAllMatchingGameplayTags(Pattern.RequiredTags))
-		{
-			return false;
-		}
+		return true;
 	}
-	return true;
+	const AODEnemyCharacter* Enemy = GetEnemy();
+	const UAbilitySystemComponent* ASC = IsValid(Enemy) ? Enemy->GetODAbilitySystemComponent() : nullptr;
+	return IsValid(ASC) && ASC->HasAllMatchingGameplayTags(Pattern.RequiredTags);
 }
 
 int32 UODEnemyCombatComponent::SelectPattern(float Distance, bool bPunish, float ApproachSlack) const
@@ -88,6 +90,18 @@ int32 UODEnemyCombatComponent::SelectPattern(float Distance, bool bPunish, float
 	if (!IsValid(PatternSet))
 	{
 		return INDEX_NONE;
+	}
+
+	// 조건이 막 갖춰진 패턴(2페이즈 진입 패턴 등)은 거리·쿨타임·가중치와 무관하게 먼저 쓴다. (빈틈 공략 선택에는 끼지 않는다)
+	if (!bPunish)
+	{
+		for (int32 Index = 0; Index < ForcedPending.Num(); ++Index)
+		{
+			if (ForcedPending[Index] && PatternSet->Patterns.IsValidIndex(Index) && PatternSet->Patterns[Index].AbilityClass && HasRequiredTags(PatternSet->Patterns[Index]))
+			{
+				return Index;
+			}
+		}
 	}
 
 	float TotalWeight = 0.0f;
@@ -131,6 +145,10 @@ void UODEnemyCombatComponent::NotifyPatternStarted(int32 Index)
 		PatternReadyTime.SetNumZeroed(PatternSet->Patterns.Num());
 	}
 	PatternReadyTime[Index] = GetNow() + Pattern->Cooldown;
+	if (ForcedPending.IsValidIndex(Index))
+	{
+		ForcedPending[Index] = false;
+	}
 
 	// 공격 중에는 다음 공격을 시작하지 않는다. (끝날 때 공통 간격으로 다시 맞춘다)
 	NextAttackTime = TNumericLimits<double>::Max();
@@ -218,7 +236,42 @@ void UODEnemyCombatComponent::ResetCombatState()
 	NextAttackTime = 0.0;
 	bWasInOpening = false;
 	bPunishThisOpening = false;
+	ForcedPending.Reset();
+	RequiredTagsMet.Reset();
 	ReleaseToken();
+}
+
+void UODEnemyCombatComponent::HandleOwnerTagsChanged()
+{
+	if (!IsValid(PatternSet))
+	{
+		return;
+	}
+	const int32 Num = PatternSet->Patterns.Num();
+	if (ForcedPending.Num() != Num)
+	{
+		ForcedPending.Init(false, Num);
+		RequiredTagsMet.Init(false, Num);
+	}
+	for (int32 Index = 0; Index < Num; ++Index)
+	{
+		const FODCombatPattern& Pattern = PatternSet->Patterns[Index];
+		if (!Pattern.bUseOnceWhenTagsGained || Pattern.RequiredTags.IsEmpty())
+		{
+			continue;
+		}
+		const bool bMet = HasRequiredTags(Pattern);
+		if (bMet && !RequiredTagsMet[Index])
+		{
+			ForcedPending[Index] = true;
+			UE_LOG(LogODAI, Log, TEXT("%s 조건 충족, 다음 공격으로 사용: %s"), *GetNameSafe(GetOwner()), *Pattern.Name.ToString());
+		}
+		else if (!bMet)
+		{
+			ForcedPending[Index] = false;
+		}
+		RequiredTagsMet[Index] = bMet;
+	}
 }
 
 void UODEnemyCombatComponent::ReleaseToken()

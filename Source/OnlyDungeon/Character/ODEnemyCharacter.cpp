@@ -563,6 +563,11 @@ void AODEnemyCharacter::RefreshPhase()
 	// 전투 중 더 깊은 페이즈로 넘어갔을 때만 연출 (초기화·부활로 1페이즈로 돌아갈 때는 조용히)
 	if (PhaseIndex != CurrentPhaseIndex)
 	{
+		// 페이즈 태그가 바뀌었으니 페이즈 진입 패턴(bUseOnceWhenTagsGained)을 걸어 둔다. 전환 포효가 끝나면 바로 쓴다.
+		if (IsValid(CombatComponent))
+		{
+			CombatComponent->HandleOwnerTagsChanged();
+		}
 		const bool bAdvanced = PhaseIndex > CurrentPhaseIndex && bCombatActive && !IsDead();
 		CurrentPhaseIndex = PhaseIndex;
 		ClearPhaseLoopEffect();

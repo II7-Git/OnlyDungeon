@@ -51,6 +51,13 @@ struct FODCombatPattern
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Pattern", meta = (Categories = "State"))
 	FGameplayTagContainer RequiredTags;
 
+	/**
+	 * RequiredTags가 새로 갖춰지면(예: 2페이즈 진입) 다음 공격으로 이 패턴을 한 번 바로 쓴다. 거리·가중치·쿨타임을 보지 않는다.
+	 * 그 뒤로는 평소처럼 거리·쿨타임 조건으로 고른다. 초기화·부활 뒤 조건이 다시 갖춰지면 또 한 번 쓴다.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Pattern")
+	bool bUseOnceWhenTagsGained = false;
+
 	/** 빈틈 공략(플레이어가 물약을 마시거나 후딜 중)에 쓸 수 있는 패턴. 보통 빠르게 거리를 좁히는 공격 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Pattern")
 	bool bPunish = false;
