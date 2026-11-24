@@ -17,6 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FODBossEncounterEndedSignature, bool
  * 보스전의 진행 상태를 관리한다. (게임 흐름 분담: 공통 규칙 = AODGameMode, 보스전 = 이 클래스, 필드 = UODFieldSubsystem)
  * - 보스방 입구가 입장이 끝나면 StartEncounter를 호출한다. 대기 중이던 보스가 전투를 시작한다.
  * - 보스가 모두 죽으면 승리로 끝난다. 플레이어가 죽어 부활하면 게임 모드가 패배로 끝낸다.
+ * - 입구에서 시작한 보스전에서 처치한 보스는 기억해 두고, 부활·휴식으로 되살리지 않는다. (테스트 전체 초기화만 잊는다)
  * - HUD(보스 체력 바), 입구(승리 후 문 열기)는 게임 모드를 거치지 않고 이 서브시스템의 알림에 직접 연결한다.
  * 이후 페이즈 연출, 승리 보상 같은 보스전 전용 규칙은 여기에 추가한다.
  */
@@ -44,6 +45,18 @@ public:
 	/** 이 보스전을 시작한 입구 */
 	AODBossEntrance* GetEntrance() const { return Entrance.Get(); }
 
+	/** 입구에서 시작한 보스전에서 처치한 보스인지. 부활·휴식 초기화에서 이 보스는 되살리지 않는다. */
+	bool IsBossDefeated(const AODEnemyCharacter* Boss) const;
+
+	/** [테스트] 처치 기록을 지운다. (F5 전체 초기화, 보스방 문 앞 이동에서 보스를 다시 싸울 수 있게) */
+	void ForgetDefeatedBosses();
+
+	/** 저장을 불러올 때 보스를 처치한 것으로 등록하고 레벨에서 숨긴다. (부활 시 되살리지 않음) */
+	void MarkDefeatedFromSave(AODEnemyCharacter* Boss);
+
+	/** 처치한 보스의 레벨 액터 이름 (저장용) */
+	void GetDefeatedBossNames(TArray<FName>& OutNames) const;
+
 	UPROPERTY(BlueprintAssignable, Category = "OD|BossEncounter")
 	FODBossEncounterStartedSignature OnEncounterStarted;
 
@@ -63,6 +76,9 @@ private:
 
 	TArray<TWeakObjectPtr<AODEnemyCharacter>> Bosses;
 	TWeakObjectPtr<AODBossEntrance> Entrance;
+
+	/** 처치한 보스 (레벨의 보스 수만큼이라 몇 개뿐이므로 배열 선형 검색). 저장·로드가 생기면 세이브에 옮긴다. */
+	TArray<TWeakObjectPtr<AODEnemyCharacter>> DefeatedBosses;
 	bool bActive = false;
 	FTimerHandle SlowMotionTimer;
 };

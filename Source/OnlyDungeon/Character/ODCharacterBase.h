@@ -63,6 +63,15 @@ public:
 	float GetHitImpactScale() const { return HitImpactScale; }
 	USoundBase* GetHitImpactSound() const { return HitImpactSound; }
 
+	/**
+	 * 타격 정지(히트스톱): Duration(초) 동안 이 캐릭터만 거의 멈췄다가 되돌린다. 이미 정지 중이면 더 긴 쪽으로 늘린다.
+	 * 월드 시간이 아니라 이 액터의 시간 배율만 바꾸므로 다른 캐릭터·카메라는 그대로 움직인다.
+	 */
+	void ApplyHitStop(float Duration);
+
+	/** 이 캐릭터가 맞을 때 공격자와 함께 멈추는 시간(초). 0이면 정지하지 않는다. (큰 적은 길게) */
+	float GetHitStopDuration() const { return HitStopDuration; }
+
 	//~ IGenericTeamAgentInterface
 	virtual FGenericTeamId GetGenericTeamId() const override { return FGenericTeamId(TeamId); }
 	//~ End
@@ -140,6 +149,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character|Hit")
 	TObjectPtr<USoundBase> HitImpactSound;
 
+	/** 맞을 때 공격자와 이 캐릭터가 함께 멈추는 시간(초). 타격감을 위한 짧은 정지다. 0이면 끔 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character|Hit", meta = (ClampMin = "0.0", ClampMax = "0.3", Units = "s"))
+	float HitStopDuration = 0.06f;
+
 	/** 시작할 때 부여할 기본 어빌리티·이펙트 세트 (초기 수치 GE 포함) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Ability")
 	TObjectPtr<UODAbilitySet> DefaultAbilitySet;
@@ -154,4 +167,11 @@ private:
 	/** 사망 시 끄기 전의 캡슐 Pawn 채널 응답 (부활 때 복구) */
 	TEnumAsByte<ECollisionResponse> SavedPawnResponse = ECR_Block;
 	bool bDeathCollisionApplied = false;
+
+private:
+	/** 히트스톱이 끝나면 시간 배율을 되돌린다. */
+	void EndHitStop();
+
+	FTimerHandle HitStopTimer;
+	double HitStopEndTime = 0.0;
 };

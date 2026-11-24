@@ -20,6 +20,7 @@ namespace ODGameplayTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Debug_SwapWeapon, "InputTag.Debug.SwapWeapon", "[테스트] 무기 교체");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Debug_Reset, "InputTag.Debug.Reset", "[테스트] 모든 캐릭터 상태 초기화");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Debug_GoToBossDoor, "InputTag.Debug.GoToBossDoor", "[테스트] 보스방 문 앞으로 이동");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(InputTag_Pause, "InputTag.Pause", "일시정지 메뉴 (게임이 멈춘 동안에도 받도록 입력 액션의 bTriggerWhenPaused를 켠다)");
 
 	// ---------- 전투 모드 ----------
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_Field, "Mode.Field", "필드: 쿼터뷰 핵앤슬래시");

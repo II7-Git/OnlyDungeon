@@ -173,6 +173,24 @@ void AODBossEntrance::OnTriggerEndOverlap(UPrimitiveComponent* OverlappedCompone
 	}
 }
 
+bool AODBossEntrance::IsCleared() const
+{
+	const UWorld* World = GetWorld();
+	const UODBossEncounterSubsystem* Encounter = World ? World->GetSubsystem<UODBossEncounterSubsystem>() : nullptr;
+	if (!Encounter || Bosses.IsEmpty())
+	{
+		return false;
+	}
+	for (const TObjectPtr<AODEnemyCharacter>& Boss : Bosses)
+	{
+		if (!Encounter->IsBossDefeated(Boss))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 bool AODBossEntrance::CanInteract(const APawn* InstigatorPawn) const
 {
 	return !bUsed && !bInProgress && IsValid(InstigatorPawn);
@@ -570,6 +588,17 @@ void AODBossEntrance::ResetForTest()
 	}
 	SequencePlayer = nullptr;
 	SequenceActor = nullptr;
+
+	// 보스를 처치한 입구: 문은 열린 채, 안개 없이, 다시 들어갈 수 없게 둔다. (부활해도 보스방은 비어 있다)
+	if (IsCleared())
+	{
+		SetDoorAlpha(bOpenOnVictory ? 1.0f : 0.0f);
+		SetFogAmount(0.0f);
+		bUsed = true;
+		bInProgress = false;
+		EnteringPawn.Reset();
+		return;
+	}
 
 	SetDoorAlpha(0.0f);
 	SetFogAmount(1.0f);

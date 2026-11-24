@@ -51,9 +51,15 @@ public:
 	virtual void Interact(APawn* InstigatorPawn) override;
 	virtual FText GetInteractionText() const override { return InteractionText; }
 
-	/** [테스트] 입구를 처음 상태로 되돌리고, 마지막으로 들어간 플레이어를 문 앞으로 돌려보낸다. */
+	/**
+	 * [테스트·부활] 입구를 처음 상태로 되돌리고, 마지막으로 들어간 플레이어를 문 앞으로 돌려보낸다.
+	 * 보스를 처치한 입구(IsCleared)는 문을 연 채 두고 플레이어도 옮기지 않는다.
+	 */
 	UFUNCTION(BlueprintCallable, Category = "OD|Test")
 	void ResetForTest();
+
+	/** 지정한 보스를 모두 처치했는지 (보스전 서브시스템의 처치 기록). 처치한 입구는 초기화해도 열린 채로 남고 다시 들어갈 수 없다. */
+	bool IsCleared() const;
 
 	/** 입장 시작 지점 (문 앞 바닥, 문을 향함). 테스트 이동 등에서 쓴다. */
 	FTransform GetEntryTransform() const;

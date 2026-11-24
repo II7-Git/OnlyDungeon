@@ -7,6 +7,10 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
+#include "Sound/SoundClass.h"
+#include "Sound/SoundMix.h"
+#include "Engine/GameInstance.h"
+#include "Core/ODSaveSubsystem.h"
 #include "Core/ODAudioSet.h"
 #include "Core/ODBossEncounterSubsystem.h"
 #include "Core/ODGameMode.h"
@@ -58,12 +62,19 @@ void UODAudioDirectorSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		}
 
 		TArray<FSoftObjectPath> SoundPaths;
-		SoundPaths.Reserve(5);
+		SoundPaths.Reserve(9);
 		for (const TSoftObjectPtr<USoundBase>* Sound : { &AudioSet->FieldMusic, &AudioSet->BossMusic, &AudioSet->VictoryStinger, &AudioSet->DeathStinger, &AudioSet->FieldAmbience })
 		{
 			if (!Sound->IsNull())
 			{
 				SoundPaths.Add(Sound->ToSoftObjectPath());
+			}
+		}
+		for (const FSoftObjectPath& Path : { AudioSet->VolumeMix.ToSoftObjectPath(), AudioSet->MusicClass.ToSoftObjectPath(), AudioSet->SFXClass.ToSoftObjectPath(), AudioSet->AmbienceClass.ToSoftObjectPath() })
+		{
+			if (Path.IsValid())
+			{
+				SoundPaths.Add(Path);
 			}
 		}
 		LoadHandle = UAssetManager::GetStreamableManager().RequestAsyncLoad(MoveTemp(SoundPaths), FStreamableDelegate::CreateUObject(this, &ThisClass::HandleAudioSetLoaded));
@@ -114,6 +125,12 @@ void UODAudioDirectorSubsystem::HandleAudioSetLoaded()
 	const UODBossEncounterSubsystem* Encounter = World ? World->GetSubsystem<UODBossEncounterSubsystem>() : nullptr;
 	const bool bBossActive = Encounter && Encounter->IsEncounterActive();
 
+	// 저장된 볼륨 설정을 먼저 적용한다. (레벨을 다시 열면 사운드 믹스 적용이 초기화되므로 매번)
+	if (const UODSaveSubsystem* Save = World && World->GetGameInstance() ? World->GetGameInstance()->GetSubsystem<UODSaveSubsystem>() : nullptr)
+	{
+		ApplyVolumes(Save->GetVolume(EODVolumeChannel::Music), Save->GetVolume(EODVolumeChannel::SFX), Save->GetVolume(EODVolumeChannel::Ambience));
+	}
+
 	CrossfadeTo(bBossActive ? AudioSet->BossMusic.Get() : AudioSet->FieldMusic.Get(), ODAudioDirector::StartFadeTime);
 	SetAmbienceVolume(bBossActive ? AudioSet->BossAmbienceVolume : 1.0f, ODAudioDirector::StartFadeTime);
 	UE_LOG(LogOD, Log, TEXT("오디오 세트 로드 완료: %s"), *GetNameSafe(AudioSet));
@@ -137,6 +154,29 @@ void UODAudioDirectorSubsystem::NotifyPlayerRevived()
 	}
 	CrossfadeTo(AudioSet->FieldMusic.Get(), ODAudioDirector::StartFadeTime);
 	SetAmbienceVolume(1.0f, ODAudioDirector::StartFadeTime);
+}
+
+void UODAudioDirectorSubsystem::ApplyVolumes(float Music, float SFX, float Ambience)
+{
+	UWorld* World = GetWorld();
+	USoundMix* Mix = IsValid(AudioSet) ? AudioSet->VolumeMix.Get() : nullptr;
+	if (!World || !IsValid(Mix))
+	{
+		return;
+	}
+	const TPair<USoundClass*, float> Channels[] = {
+		{ AudioSet->MusicClass.Get(), Music },
+		{ AudioSet->SFXClass.Get(), SFX },
+		{ AudioSet->AmbienceClass.Get(), Ambience } };
+	for (const TPair<USoundClass*, float>& Channel : Channels)
+	{
+		if (IsValid(Channel.Key))
+		{
+			// 클래스 볼륨에 곱하는 배율로 넣는다. (페이드 없이 바로, 자식 클래스에도 적용)
+			UGameplayStatics::SetSoundMixClassOverride(World, Mix, Channel.Key, FMath::Clamp(Channel.Value, 0.0f, 1.0f), 1.0f, 0.0f, true);
+		}
+	}
+	UGameplayStatics::PushSoundMixModifier(World, Mix);
 }
 
 void UODAudioDirectorSubsystem::HandleBossEncounterStarted(AODEnemyCharacter* Boss)
@@ -247,7 +287,8 @@ UAudioComponent* UODAudioDirectorSubsystem::CreateAudioComponent(USoundBase* Sou
 	UAudioComponent* Component = UGameplayStatics::CreateSound2D(this, Sound, 1.0f, 1.0f, 0.0f, nullptr, false, false);
 	if (IsValid(Component))
 	{
-		Component->bIsUISound = false;
+		// 타이틀·일시정지처럼 게임이 멈춘 동안에도 배경음·환경음은 계속 흐른다.
+		Component->bIsUISound = true;
 	}
 	return Component;
 }

@@ -11,6 +11,13 @@
 #include "Character/ODCharacterBase.h"
 #include "Character/ODCombatModeComponent.h"
 #include "Core/ODAudioDirectorSubsystem.h"
+#include "Core/ODSaveGame.h"
+#include "Core/ODSaveSubsystem.h"
+#include "Equipment/ODEquipmentComponent.h"
+#include "Equipment/ODWeaponData.h"
+#include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "Character/ODEnemyCharacter.h"
 #include "Core/ODBossEncounterSubsystem.h"
 #include "Core/ODFieldSubsystem.h"
 #include "Core/ODLogChannels.h"
@@ -24,6 +31,12 @@ namespace ODGameModeTest
 		TEXT("OD.Test.StartAtBossDoor"),
 		false,
 		TEXT("[테스트] 1이면 플레이어를 보스방 문 앞에서 시작한다."));
+
+	/** [테스트] 1이면 타이틀 화면 없이 바로 플레이한다. (진행 저장을 건드리지 않음) PIE 자동 테스트용 */
+	static TAutoConsoleVariable<bool> CVarSkipTitle(
+		TEXT("OD.Test.SkipTitle"),
+		false,
+		TEXT("[테스트] 1이면 타이틀 없이 바로 시작한다. (진행 저장을 건드리지 않음)"));
 
 	/** [테스트] 콘솔에서 보스방 문 앞으로 이동 */
 	static FAutoConsoleCommandWithWorld GoToBossDoorCommand(
@@ -105,15 +118,260 @@ bool AODGameMode::TeleportPlayerToBossDoor()
 
 	// 부활과 같은 경로: 예약된 부활·휴식 취소 → 보스전·입구·적 초기화 → 문 앞에 필드 모드로 세운다.
 	CancelPendingRespawn();
-	ResetWorldState();
+	ResetWorldState(true);
 	RevivePlayerAt(Character, EntryTransform, EODCombatMode::Field);
 
 	UE_LOG(LogOD, Log, TEXT("[테스트] 보스방 문 앞으로 이동 (부활 위치: %s)"), NearestPoint ? *NearestPoint->GetName() : TEXT("변경 없음"));
 	return true;
 }
 
+void AODGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (UODBossEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<UODBossEncounterSubsystem>() : nullptr)
+	{
+		Encounter->OnEncounterEnded.AddUniqueDynamic(this, &ThisClass::HandleBossEncounterEnded);
+	}
+
+	if (bShowTitleOnStart && !ODGameModeTest::CVarSkipTitle.GetValueOnGameThread())
+	{
+		SetFlowState(EODGameFlowState::Title);
+	}
+	else
+	{
+		PlayTimeSessionStart = GetWorld()->GetTimeSeconds();
+		SetFlowState(EODGameFlowState::Playing);
+	}
+}
+
+void AODGameMode::SetFlowState(EODGameFlowState NewState)
+{
+	FlowState = NewState;
+	bMenuPaused = false;
+	// 타이틀·클리어 화면 동안에는 게임(이동·AI·타이머·플레이 시간)이 멈춘다.
+	UGameplayStatics::SetGamePaused(this, NewState != EODGameFlowState::Playing);
+	OnGameFlowChanged.Broadcast(NewState);
+}
+
+void AODGameMode::StartNewGame()
+{
+	if (FlowState != EODGameFlowState::Title)
+	{
+		return;
+	}
+	if (UODSaveSubsystem* Save = GetGameInstance() ? GetGameInstance()->GetSubsystem<UODSaveSubsystem>() : nullptr)
+	{
+		Save->CreateNewProgress();
+	}
+	DeathCount = 0;
+	PlayTimeBase = 0.0;
+	bGameCleared = false;
+	ActiveRespawnPoint.Reset();
+	ResetWorldState(true);
+
+	PlayTimeSessionStart = GetWorld()->GetTimeSeconds();
+	SetFlowState(EODGameFlowState::Playing);
+	SaveProgress();
+	UE_LOG(LogOD, Log, TEXT("새 게임 시작"));
+}
+
+void AODGameMode::ContinueGame()
+{
+	if (FlowState != EODGameFlowState::Title)
+	{
+		return;
+	}
+	UODSaveSubsystem* Save = GetGameInstance() ? GetGameInstance()->GetSubsystem<UODSaveSubsystem>() : nullptr;
+	const UODSaveGame* Loaded = Save ? Save->LoadProgress() : nullptr;
+	if (!Loaded)
+	{
+		StartNewGame();
+		return;
+	}
+	ApplyLoadedProgress(Loaded);
+	PlayTimeSessionStart = GetWorld()->GetTimeSeconds();
+	SetFlowState(EODGameFlowState::Playing);
+	UE_LOG(LogOD, Log, TEXT("이어하기: 처치한 보스 %d, 휴식 지점 %s"), Loaded->DefeatedBossNames.Num(), *Loaded->LastRespawnPointName.ToString());
+}
+
+void AODGameMode::ApplyLoadedProgress(const UODSaveGame* Save)
+{
+	UWorld* World = GetWorld();
+	if (!World || !Save)
+	{
+		return;
+	}
+	DeathCount = Save->DeathCount;
+	PlayTimeBase = Save->PlayTimeSeconds;
+	bGameCleared = Save->bGameCleared;
+
+	// 1) 처치한 보스: 레벨의 같은 이름 보스를 처치로 등록한다. (레벨에서 사라진 보스는 건너뜀)
+	UODBossEncounterSubsystem* Encounter = World->GetSubsystem<UODBossEncounterSubsystem>();
+	const UODFieldSubsystem* Field = World->GetSubsystem<UODFieldSubsystem>();
+	if (Encounter && Field)
+	{
+		Field->ForEachEnemy([Encounter, Save](AODEnemyCharacter& Enemy)
+		{
+			if (Save->DefeatedBossNames.Contains(Enemy.GetFName()))
+			{
+				Encounter->MarkDefeatedFromSave(&Enemy);
+			}
+		});
+	}
+
+	// 2) 입구(처치했으면 열린 채)·적을 그 상태에 맞게 맞춘다.
+	ResetWorldState(false);
+
+	// 3) 마지막 휴식 지점에서 저장된 무기로 시작한다. (불러올 때 한 번만 하는 검색이라 액터 순회를 쓴다)
+	AODRespawnPoint* Point = nullptr;
+	if (!Save->LastRespawnPointName.IsNone())
+	{
+		for (TActorIterator<AODRespawnPoint> It(World); It; ++It)
+		{
+			if (It->GetFName() == Save->LastRespawnPointName)
+			{
+				Point = *It;
+				break;
+			}
+		}
+	}
+	ActiveRespawnPoint = Point;
+
+	AODCharacterBase* Character = Player.Get();
+	if (!IsValid(Character))
+	{
+		return;
+	}
+	if (UODWeaponData* Weapon = Save->EquippedWeapon.LoadSynchronous(); IsValid(Weapon) && IsValid(Character->GetEquipmentComponent()))
+	{
+		Character->GetEquipmentComponent()->EquipWeapon(Weapon);
+	}
+	if (IsValid(Point))
+	{
+		RevivePlayerAt(Character, Point->GetRespawnTransform(), Point->GetRespawnCombatMode());
+	}
+}
+
+void AODGameMode::SaveProgress(bool bSync)
+{
+	UODSaveSubsystem* SaveSystem = GetGameInstance() ? GetGameInstance()->GetSubsystem<UODSaveSubsystem>() : nullptr;
+	UODSaveGame* Save = SaveSystem ? SaveSystem->GetProgress() : nullptr;
+	if (FlowState == EODGameFlowState::Title || !Save)
+	{
+		return;
+	}
+
+	Save->DefeatedBossNames.Reset();
+	if (const UODBossEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<UODBossEncounterSubsystem>() : nullptr)
+	{
+		Encounter->GetDefeatedBossNames(Save->DefeatedBossNames);
+	}
+	const AODRespawnPoint* Point = ActiveRespawnPoint.Get();
+	Save->LastRespawnPointName = IsValid(Point) ? Point->GetFName() : NAME_None;
+	const AODCharacterBase* Character = Player.Get();
+	const UODEquipmentComponent* Equipment = IsValid(Character) ? Character->GetEquipmentComponent() : nullptr;
+	Save->EquippedWeapon = IsValid(Equipment) ? Equipment->GetWeaponData() : nullptr;
+
+	const FODRunStats Stats = GetRunStats();
+	Save->DeathCount = Stats.DeathCount;
+	Save->PlayTimeSeconds = Stats.PlayTimeSeconds;
+	Save->bGameCleared = bGameCleared;
+	SaveSystem->SaveProgress(bSync);
+}
+
+FODRunStats AODGameMode::GetRunStats() const
+{
+	FODRunStats Stats;
+	Stats.DeathCount = DeathCount;
+	Stats.PlayTimeSeconds = PlayTimeBase;
+	if (FlowState != EODGameFlowState::Title && GetWorld())
+	{
+		Stats.PlayTimeSeconds += FMath::Max(GetWorld()->GetTimeSeconds() - PlayTimeSessionStart, 0.0);
+	}
+	return Stats;
+}
+
+void AODGameMode::RequestTogglePause()
+{
+	if (FlowState == EODGameFlowState::Playing)
+	{
+		SetMenuPaused(!bMenuPaused);
+	}
+}
+
+void AODGameMode::SetMenuPaused(bool bPaused)
+{
+	if (FlowState != EODGameFlowState::Playing || bMenuPaused == bPaused)
+	{
+		return;
+	}
+	bMenuPaused = bPaused;
+	UGameplayStatics::SetGamePaused(this, bPaused);
+	OnMenuPauseChanged.Broadcast(bPaused);
+}
+
+void AODGameMode::HandleBossEncounterEnded(bool bVictory)
+{
+	// 입구에서 시작한 보스전의 승리만 클리어다. (필드 정예 처치는 아님) 알림 시점에는 입구가 아직 남아 있다.
+	const UODBossEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<UODBossEncounterSubsystem>() : nullptr;
+	if (!bVictory || !Encounter || !Encounter->GetEntrance())
+	{
+		return;
+	}
+	SaveProgress();
+	if (!bGameCleared)
+	{
+		GetWorldTimerManager().SetTimer(ClearScreenTimer, this, &ThisClass::ShowClearScreen, FMath::Max(ClearScreenDelay, KINDA_SMALL_NUMBER), false);
+	}
+}
+
+void AODGameMode::ShowClearScreen()
+{
+	if (FlowState != EODGameFlowState::Playing)
+	{
+		return;
+	}
+	bGameCleared = true;
+	SaveProgress();
+	// 일시정지 메뉴가 열려 있었어도 클리어 화면으로 바꾼다. (SetFlowState가 메뉴 일시정지를 푼다)
+	if (bMenuPaused)
+	{
+		OnMenuPauseChanged.Broadcast(false);
+	}
+	SetFlowState(EODGameFlowState::Cleared);
+	UE_LOG(LogOD, Log, TEXT("던전 클리어: 사망 %d, 플레이 %.0f초"), DeathCount, GetRunStats().PlayTimeSeconds);
+}
+
+void AODGameMode::ContinueAfterClear()
+{
+	if (FlowState == EODGameFlowState::Cleared)
+	{
+		SetFlowState(EODGameFlowState::Playing);
+	}
+}
+
+void AODGameMode::ReturnToTitle()
+{
+	SaveProgress(true);
+	UGameplayStatics::SetGamePaused(this, false);
+	UGameplayStatics::OpenLevel(this, FName(*UGameplayStatics::GetCurrentLevelName(this, true)));
+}
+
+void AODGameMode::QuitGame()
+{
+	SaveProgress(true);
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	UKismetSystemLibrary::QuitGame(this, PC, EQuitPreference::Quit, false);
+}
+
 void AODGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	GetWorldTimerManager().ClearTimer(ClearScreenTimer);
+	if (UODBossEncounterSubsystem* Encounter = GetWorld() ? GetWorld()->GetSubsystem<UODBossEncounterSubsystem>() : nullptr)
+	{
+		Encounter->OnEncounterEnded.RemoveDynamic(this, &ThisClass::HandleBossEncounterEnded);
+	}
 	GetWorldTimerManager().ClearTimer(FadeTimer);
 	GetWorldTimerManager().ClearTimer(RespawnTimer);
 	CancelRestFade();
@@ -126,6 +384,7 @@ void AODGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AODGameMode::HandlePlayerDeath(AODCharacterBase* DeadCharacter)
 {
+	++DeathCount;
 	UE_LOG(LogOD, Log, TEXT("플레이어 사망 → %.1f초 뒤 부활"), RespawnDelay);
 
 	// 휴식 페이드 도중 죽으면 휴식을 취소한다. (부활 페이드가 화면을 맡는다)
@@ -169,12 +428,21 @@ void AODGameMode::CancelPendingRespawn()
 	}
 }
 
-void AODGameMode::ResetWorldState()
+void AODGameMode::ResetWorldState(bool bForgetDefeatedBosses)
 {
 	UWorld* World = GetWorld();
 	if (!World)
 	{
 		return;
+	}
+
+	// 0) 테스트 전체 초기화: 처치한 보스도 다시 싸울 수 있게 기록을 지운다. (입구·적 초기화보다 먼저)
+	if (bForgetDefeatedBosses)
+	{
+		if (UODBossEncounterSubsystem* Encounter = World->GetSubsystem<UODBossEncounterSubsystem>())
+		{
+			Encounter->ForgetDefeatedBosses();
+		}
 	}
 
 	// 1) 보스전 패배 처리 (보스는 대기 상태로)
@@ -225,6 +493,7 @@ void AODGameMode::RespawnPlayer()
 	}
 
 	UE_LOG(LogOD, Log, TEXT("플레이어 부활: %s"), IsValid(Point) ? *Point->GetName() : TEXT("시작 위치"));
+	SaveProgress();
 }
 
 void AODGameMode::RevivePlayerAt(AODCharacterBase* Character, const FTransform& Transform, EODCombatMode Mode) const
@@ -288,6 +557,8 @@ void AODGameMode::ApplyPendingRest()
 	{
 		Field->ResetAllEnemies();
 	}
+	// 휴식 = 저장 지점 (부활 위치 등록과 함께)
+	SaveProgress();
 }
 
 void AODGameMode::EndRestFade()

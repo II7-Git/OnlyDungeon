@@ -34,6 +34,9 @@ public:
 	/** 플레이어가 부활했다. 필드 배경음과 환경음으로 돌아간다. (게임 모드가 호출) */
 	void NotifyPlayerRevived();
 
+	/** 메뉴 볼륨(0~1)을 사운드 믹스로 적용한다. 오디오 세트가 아직 로드 전이면 로드가 끝날 때 저장된 설정을 적용한다. */
+	void ApplyVolumes(float Music, float SFX, float Ambience);
+
 protected:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 

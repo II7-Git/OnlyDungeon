@@ -66,6 +66,11 @@ void UODBossEncounterSubsystem::EndEncounter(bool bVictory)
 			continue;
 		}
 		Boss->OnDeath.RemoveDynamic(this, &ThisClass::HandleBossDeath);
+		// 입구에서 시작한 보스전의 승리는 기록한다. (입구 없는 필드 정예는 부활 때 다시 살아나는 필드 규칙을 따른다)
+		if (bVictory && Entrance.IsValid())
+		{
+			DefeatedBosses.AddUnique(Boss);
+		}
 		// 입구가 있는 보스는 다시 입장할 때까지 대기. 입구 없는 필드 정예는 그대로 필드 규칙(귀환·초기화)을 따른다.
 		if (!bVictory && Entrance.IsValid())
 		{
@@ -107,6 +112,49 @@ void UODBossEncounterSubsystem::RestoreTimeDilation()
 	{
 		World->GetTimerManager().ClearTimer(SlowMotionTimer);
 		UGameplayStatics::SetGlobalTimeDilation(World, 1.0f);
+	}
+}
+
+bool UODBossEncounterSubsystem::IsBossDefeated(const AODEnemyCharacter* Boss) const
+{
+	if (!IsValid(Boss))
+	{
+		return false;
+	}
+	return DefeatedBosses.ContainsByPredicate([Boss](const TWeakObjectPtr<AODEnemyCharacter>& Defeated)
+	{
+		return Defeated.Get() == Boss;
+	});
+}
+
+void UODBossEncounterSubsystem::ForgetDefeatedBosses()
+{
+	if (!DefeatedBosses.IsEmpty())
+	{
+		UE_LOG(LogOD, Log, TEXT("[테스트] 보스 처치 기록 초기화: %d"), DefeatedBosses.Num());
+	}
+	DefeatedBosses.Reset();
+}
+
+void UODBossEncounterSubsystem::MarkDefeatedFromSave(AODEnemyCharacter* Boss)
+{
+	if (!IsValid(Boss))
+	{
+		return;
+	}
+	DefeatedBosses.AddUnique(Boss);
+	Boss->ApplyDefeatedState();
+}
+
+void UODBossEncounterSubsystem::GetDefeatedBossNames(TArray<FName>& OutNames) const
+{
+	OutNames.Reserve(OutNames.Num() + DefeatedBosses.Num());
+	for (const TWeakObjectPtr<AODEnemyCharacter>& Defeated : DefeatedBosses)
+	{
+		if (const AODEnemyCharacter* Boss = Defeated.Get(); IsValid(Boss))
+		{
+			OutNames.AddUnique(Boss->GetFName());
+		}
 	}
 }
 

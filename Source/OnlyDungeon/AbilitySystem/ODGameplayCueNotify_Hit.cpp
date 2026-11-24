@@ -12,6 +12,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
 #include "Character/ODCharacterBase.h"
+#include "Character/ODPlayerCharacter.h"
 #include "Core/ODGameplayTags.h"
 #include "Core/ODLogChannels.h"
 
@@ -46,6 +47,24 @@ bool UODGameplayCueNotify_Hit::OnExecute_Implementation(AActor* MyTarget, const 
 	if (Direction.IsNearlyZero())
 	{
 		Direction = FVector::UpVector;
+	}
+
+	// 타격감: 맞은 캐릭터와 공격자를 잠깐 함께 멈추고, 플레이어가 관련되면 화면을 짧게 흔든다.
+	AODCharacterBase* TargetCharacter = Cast<AODCharacterBase>(MyTarget);
+	AODCharacterBase* InstigatorCharacter = Cast<AODCharacterBase>(Parameters.EffectContext.GetInstigator());
+	const float HitStop = Character->GetHitStopDuration();
+	TargetCharacter->ApplyHitStop(HitStop);
+	if (IsValid(InstigatorCharacter))
+	{
+		InstigatorCharacter->ApplyHitStop(HitStop);
+	}
+	if (AODPlayerCharacter* PlayerTarget = Cast<AODPlayerCharacter>(TargetCharacter))
+	{
+		PlayerTarget->PlayHitCameraShake(false);
+	}
+	else if (AODPlayerCharacter* PlayerAttacker = Cast<AODPlayerCharacter>(InstigatorCharacter))
+	{
+		PlayerAttacker->PlayHitCameraShake(true);
 	}
 
 	// 소리: 거리 감쇠·동시 재생 제한은 사운드 에셋에 지정된 설정을 따른다.
