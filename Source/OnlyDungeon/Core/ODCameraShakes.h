@@ -18,3 +18,16 @@ class ONLYDUNGEON_API UODCameraShake_Heavy : public UCameraShakeBase
 public:
 	UODCameraShake_Heavy(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 };
+
+/**
+ * 짧고 가벼운 타격 흔들림 (플레이어가 때리거나 맞을 때). 세기는 재생할 때 Scale로 조절한다.
+ * 위치보다 회전 위주로 짧게 흔들어 조작감을 해치지 않는다.
+ */
+UCLASS()
+class ONLYDUNGEON_API UODCameraShake_Hit : public UCameraShakeBase
+{
+	GENERATED_BODY()
+
+public:
+	UODCameraShake_Hit(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+};

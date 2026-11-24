@@ -28,6 +28,10 @@
 #include "World/ODBossEntrance.h"
 #include "Core/ODGameMode.h"
 #include "TimerManager.h"
+#include "Camera/CameraComponent.h"
+#include "AbilitySystem/ODAbilitySystemComponent.h"
+#include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
+#include "Core/ODCameraShakes.h"
 
 namespace
 {
@@ -139,6 +143,12 @@ void AODPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	if (const UInputAction* BossDoorAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Debug_GoToBossDoor, false))
 	{
 		EIC->BindAction(BossDoorAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_GoToBossDoor);
+	}
+
+	// 일시정지 메뉴 (게임이 멈춘 동안에도 다시 눌러 닫을 수 있게 액션에 bTriggerWhenPaused가 켜져 있어야 한다)
+	if (const UInputAction* PauseAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Pause, false))
+	{
+		EIC->BindAction(PauseAction, ETriggerEvent::Started, this, &ThisClass::Input_Pause);
 	}
 
 	// 상호작용 (문 등)
@@ -397,6 +407,14 @@ void AODPlayerCharacter::Input_Debug_GoToBossDoor()
 	}
 }
 
+void AODPlayerCharacter::Input_Pause()
+{
+	if (AODGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AODGameMode>() : nullptr)
+	{
+		GameMode->RequestTogglePause();
+	}
+}
+
 void AODPlayerCharacter::Input_Debug_Reset()
 {
 	// OD 게임 모드면 부활과 같은 경로로 초기화한다. (예약된 부활 취소 → 플레이어 회복 → 보스전·입구·적 초기화)
@@ -443,4 +461,64 @@ FVector AODPlayerCharacter::GetDesiredMoveDirection() const
 		return BufferedMoveDirection;
 	}
 	return Super::GetDesiredMoveDirection();
+}
+
+void AODPlayerCharacter::InitializeAbilitySystem()
+{
+	Super::InitializeAbilitySystem();
+
+	if (!HitCameraShakeClass)
+	{
+		HitCameraShakeClass = UODCameraShake_Hit::StaticClass();
+	}
+
+	// 저체력 연출: 체력이 바뀔 때만 다시 계산한다. (Tick 없음)
+	if (UODAbilitySystemComponent* ASC = GetODAbilitySystemComponent(); IsValid(ASC) && !LowHealthHandle.IsValid())
+	{
+		LowHealthHandle = ASC->GetGameplayAttributeValueChangeDelegate(UODAttributeSet_Health::GetHealthAttribute()).AddWeakLambda(this, [this](const FOnAttributeChangeData&)
+		{
+			RefreshLowHealthEffect();
+		});
+	}
+	RefreshLowHealthEffect();
+}
+
+void AODPlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (UODAbilitySystemComponent* ASC = GetODAbilitySystemComponent(); IsValid(ASC) && LowHealthHandle.IsValid())
+	{
+		ASC->GetGameplayAttributeValueChangeDelegate(UODAttributeSet_Health::GetHealthAttribute()).Remove(LowHealthHandle);
+	}
+	LowHealthHandle.Reset();
+	Super::EndPlay(EndPlayReason);
+}
+
+void AODPlayerCharacter::PlayHitCameraShake(bool bDealt)
+{
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC || !IsValid(PC->PlayerCameraManager) || !HitCameraShakeClass)
+	{
+		return;
+	}
+	PC->PlayerCameraManager->StartCameraShake(HitCameraShakeClass, bDealt ? DealtHitShakeScale : TakenHitShakeScale);
+}
+
+void AODPlayerCharacter::RefreshLowHealthEffect()
+{
+	const UODAbilitySystemComponent* ASC = GetODAbilitySystemComponent();
+	if (!IsValid(FollowCamera) || !IsValid(ASC))
+	{
+		return;
+	}
+	const float MaxHealth = ASC->GetNumericAttribute(UODAttributeSet_Health::GetMaxHealthAttribute());
+	const float Ratio = MaxHealth > 0.0f ? ASC->GetNumericAttribute(UODAttributeSet_Health::GetHealthAttribute()) / MaxHealth : 1.0f;
+
+	// 기준 아래로 내려간 만큼(0~1) 세기를 키운다. 죽었을 때는 사망 연출을 가리지 않도록 끈다.
+	const float Strength = (IsDead() || LowHealthThreshold <= 0.0f) ? 0.0f : FMath::Clamp((LowHealthThreshold - Ratio) / LowHealthThreshold, 0.0f, 1.0f);
+	FPostProcessSettings& Settings = FollowCamera->PostProcessSettings;
+	Settings.bOverride_VignetteIntensity = Strength > 0.0f;
+	Settings.VignetteIntensity = LowHealthVignette * Strength;
+	Settings.bOverride_SceneColorTint = Strength > 0.0f;
+	Settings.SceneColorTint = FMath::Lerp(FLinearColor::White, LowHealthTint, Strength);
+	FollowCamera->PostProcessBlendWeight = Strength > 0.0f ? 1.0f : 0.0f;
 }

@@ -9,6 +9,7 @@
 
 class USpringArmComponent;
 class UCameraComponent;
+class UCameraShakeBase;
 class UInputMappingContext;
 class UODInputConfig;
 class UODWeaponData;
@@ -36,6 +37,9 @@ public:
 
 	USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+
+	/** 타격 흔들림: bDealt = 플레이어가 때림(약하게), false = 맞음(조금 세게) */
+	void PlayHitCameraShake(bool bDealt);
 	UODCombatModeComponent* GetCombatModeComponent() const { return CombatModeComponent; }
 	UODInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
 	UODLockOnComponent* GetLockOnComponent() const { return LockOnComponent; }
@@ -82,6 +86,9 @@ protected:
 	/** [테스트] 보스방 문 앞으로 이동 (AODGameMode::TeleportPlayerToBossDoor) */
 	void Input_Debug_GoToBossDoor();
 
+	/** 일시정지 메뉴 열기/닫기 (게임 모드에 요청) */
+	void Input_Pause();
+
 	/** 카메라 붐 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Camera")
 	TObjectPtr<USpringArmComponent> CameraBoom;
@@ -89,6 +96,27 @@ protected:
 	/** 카메라 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Camera")
 	TObjectPtr<UCameraComponent> FollowCamera;
+
+	/** 때리거나 맞을 때 재생할 화면 흔들림 (기본: 짧은 타격 흔들림) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Feedback")
+	TSubclassOf<UCameraShakeBase> HitCameraShakeClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Feedback", meta = (ClampMin = "0.0"))
+	float DealtHitShakeScale = 0.35f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Feedback", meta = (ClampMin = "0.0"))
+	float TakenHitShakeScale = 0.8f;
+
+	/** 체력 비율이 이 값 아래로 내려가면 화면 가장자리가 붉게 어두워진다. (낮을수록 진해짐) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float LowHealthThreshold = 0.3f;
+
+	/** 저체력 연출 최대 세기일 때의 비네트·색 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Feedback", meta = (ClampMin = "0.0"))
+	float LowHealthVignette = 1.1f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Feedback")
+	FLinearColor LowHealthTint = FLinearColor(1.0f, 0.55f, 0.5f);
 
 	/** 전투 모드 (필드 쿼터뷰 ↔ 보스 3인칭) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Mode")
@@ -141,4 +169,12 @@ protected:
 	/** [테스트] 무기 교체 키로 순환할 무기 목록 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Test")
 	TArray<TObjectPtr<UODWeaponData>> TestWeapons;
+
+	virtual void InitializeAbilitySystem() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	/** 체력 비율에 맞춰 저체력 연출(카메라 후처리 비네트·붉은 색)의 세기를 바꾼다. 체력이 바뀔 때만 호출된다. */
+	void RefreshLowHealthEffect();
+
+	FDelegateHandle LowHealthHandle;
 };

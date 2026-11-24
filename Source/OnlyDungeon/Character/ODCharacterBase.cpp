@@ -62,6 +62,8 @@ void AODCharacterBase::BeginPlay()
 
 void AODCharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	GetWorldTimerManager().ClearTimer(HitStopTimer);
+	CustomTimeDilation = 1.0f;
 	if (IsValid(HealthSet))
 	{
 		HealthSet->OnOutOfHealth.RemoveAll(this);
@@ -223,4 +225,34 @@ void AODCharacterBase::HandlePoiseBroken(AActor* DamageInstigator)
 	Payload.Instigator = DamageInstigator;
 	Payload.Target = this;
 	AbilitySystemComponent->HandleGameplayEvent(Payload.EventTag, &Payload);
+}
+
+namespace ODHitStop
+{
+	/** 정지 중 시간 배율 (완전히 0이면 애니메이션 노티파이 타이밍이 어긋날 수 있어 아주 작게 둔다) */
+	constexpr float Dilation = 0.02f;
+}
+
+void AODCharacterBase::ApplyHitStop(float Duration)
+{
+	UWorld* World = GetWorld();
+	if (!World || Duration <= 0.0f || IsDead())
+	{
+		return;
+	}
+	// 정지 중 다시 맞으면 끝나는 시각만 뒤로 민다. (월드 시간 타이머라 이 액터의 배율과 무관하게 흐른다)
+	const double NewEnd = World->GetTimeSeconds() + Duration;
+	if (NewEnd <= HitStopEndTime)
+	{
+		return;
+	}
+	HitStopEndTime = NewEnd;
+	CustomTimeDilation = ODHitStop::Dilation;
+	World->GetTimerManager().SetTimer(HitStopTimer, this, &ThisClass::EndHitStop, Duration, false);
+}
+
+void AODCharacterBase::EndHitStop()
+{
+	CustomTimeDilation = 1.0f;
+	HitStopEndTime = 0.0;
 }
