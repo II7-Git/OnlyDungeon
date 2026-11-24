@@ -136,6 +136,28 @@ void UODBossEncounterSubsystem::ForgetDefeatedBosses()
 	DefeatedBosses.Reset();
 }
 
+void UODBossEncounterSubsystem::MarkDefeatedFromSave(AODEnemyCharacter* Boss)
+{
+	if (!IsValid(Boss))
+	{
+		return;
+	}
+	DefeatedBosses.AddUnique(Boss);
+	Boss->ApplyDefeatedState();
+}
+
+void UODBossEncounterSubsystem::GetDefeatedBossNames(TArray<FName>& OutNames) const
+{
+	OutNames.Reserve(OutNames.Num() + DefeatedBosses.Num());
+	for (const TWeakObjectPtr<AODEnemyCharacter>& Defeated : DefeatedBosses)
+	{
+		if (const AODEnemyCharacter* Boss = Defeated.Get(); IsValid(Boss))
+		{
+			OutNames.AddUnique(Boss->GetFName());
+		}
+	}
+}
+
 AODEnemyCharacter* UODBossEncounterSubsystem::GetCurrentBoss() const
 {
 	for (const TWeakObjectPtr<AODEnemyCharacter>& WeakBoss : Bosses)

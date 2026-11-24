@@ -7,6 +7,8 @@
 #include "ODAudioSet.generated.h"
 
 class USoundBase;
+class USoundClass;
+class USoundMix;
 
 /**
  * 레벨에서 쓸 배경음·환경음 묶음. AODGameMode가 소프트 참조로 들고, UODAudioDirectorSubsystem이 레벨 시작 때 비동기로 읽는다.
@@ -46,6 +48,20 @@ public:
 	/** 사망·승리 때 배경음이 사라지는 시간 */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Audio", meta = (ClampMin = "0.0", Units = "s"))
 	float StopFadeTime = 1.5f;
+
+	/** 메뉴 볼륨 설정을 적용할 사운드 믹스. 비면 볼륨 설정이 소리에 반영되지 않는다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Audio|Volume")
+	TSoftObjectPtr<USoundMix> VolumeMix;
+
+	/** 볼륨 채널별 사운드 클래스 (배경음·효과음·환경음) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Audio|Volume")
+	TSoftObjectPtr<USoundClass> MusicClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Audio|Volume")
+	TSoftObjectPtr<USoundClass> SFXClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Audio|Volume")
+	TSoftObjectPtr<USoundClass> AmbienceClass;
 
 	/** 보스전 동안 환경음 크기 (0이면 끔) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Audio|Ambience", meta = (ClampMin = "0.0", ClampMax = "1.0"))

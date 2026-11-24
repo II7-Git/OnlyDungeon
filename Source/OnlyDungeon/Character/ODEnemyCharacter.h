@@ -103,6 +103,9 @@ public:
 	/** 테스트 초기화(F5)도 시작 위치로 돌아간다. */
 	virtual void ResetForTest() override;
 
+	/** 저장에서 불러온 처치한 보스: 전투를 끄고 레벨에서 숨긴다. (Revive하면 다시 보인다) */
+	void ApplyDefeatedState();
+
 	/** 공격 대상 (AI가 고른 플레이어). 공격 어빌리티의 조준 방향이 된다. */
 	virtual AActor* GetLockOnTarget() const override;
 

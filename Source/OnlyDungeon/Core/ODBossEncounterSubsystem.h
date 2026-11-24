@@ -51,6 +51,12 @@ public:
 	/** [테스트] 처치 기록을 지운다. (F5 전체 초기화, 보스방 문 앞 이동에서 보스를 다시 싸울 수 있게) */
 	void ForgetDefeatedBosses();
 
+	/** 저장을 불러올 때 보스를 처치한 것으로 등록하고 레벨에서 숨긴다. (부활 시 되살리지 않음) */
+	void MarkDefeatedFromSave(AODEnemyCharacter* Boss);
+
+	/** 처치한 보스의 레벨 액터 이름 (저장용) */
+	void GetDefeatedBossNames(TArray<FName>& OutNames) const;
+
 	UPROPERTY(BlueprintAssignable, Category = "OD|BossEncounter")
 	FODBossEncounterStartedSignature OnEncounterStarted;
 

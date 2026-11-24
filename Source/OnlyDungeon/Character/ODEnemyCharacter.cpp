@@ -502,9 +502,23 @@ void AODEnemyCharacter::ClearPhaseLoopEffect()
 	PhaseLoopComponent = nullptr;
 }
 
+void AODEnemyCharacter::ApplyDefeatedState()
+{
+	DeactivateCombat();
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
+	if (IsValid(NameplateComponent))
+	{
+		NameplateComponent->SetHiddenInGame(true);
+	}
+}
+
 void AODEnemyCharacter::Revive()
 {
 	Super::Revive();
+	// 저장에서 숨긴 처치한 보스를 테스트 초기화(F5)로 되살릴 때 다시 보이게 한다.
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
 	CombatTarget.Reset();
 	ClearPhaseLoopEffect();
 	if (IsValid(CombatComponent))
