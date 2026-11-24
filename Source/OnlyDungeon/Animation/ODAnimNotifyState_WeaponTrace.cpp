@@ -47,6 +47,7 @@ void UODAnimNotifyState_WeaponTrace::NotifyBegin(USkeletalMeshComponent* MeshCom
 	if (AODWeaponActor* Weapon = FindWeapon(MeshComp))
 	{
 		PlaySwingSound(Weapon);
+		Weapon->StartTrail();
 
 		// 필드(쿼터뷰): 다수의 적을 상대하므로 칼날 스윕 대신 전방 부채꼴 판정 1회
 		if (IsValid(ASC) && ASC->HasMatchingGameplayTag(ODGameplayTags::Mode_Field))
@@ -75,6 +76,7 @@ void UODAnimNotifyState_WeaponTrace::NotifyEnd(USkeletalMeshComponent* MeshComp,
 	if (AODWeaponActor* Weapon = FindWeapon(MeshComp))
 	{
 		Weapon->EndTrace();
+		Weapon->StopTrail();
 	}
 	AActor* Owner = IsValid(MeshComp) ? MeshComp->GetOwner() : nullptr;
 	SendHitTraceEvent(UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Owner), Owner, 0.0f);

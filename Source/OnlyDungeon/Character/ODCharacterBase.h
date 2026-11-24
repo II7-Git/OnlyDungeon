@@ -61,6 +61,8 @@ public:
 
 	UNiagaraSystem* GetHitImpactEffect() const { return HitImpactEffect; }
 	float GetHitImpactScale() const { return HitImpactScale; }
+	UNiagaraSystem* GetHitGroundEffect() const { return HitGroundEffect; }
+	float GetHitGroundScale() const { return HitGroundScale; }
 	USoundBase* GetHitImpactSound() const { return HitImpactSound; }
 
 	/**
@@ -141,6 +143,14 @@ protected:
 	/** 피격 이펙트 크기 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character|Hit", meta = (ClampMin = "0.01"))
 	float HitImpactScale = 1.0f;
+
+	/** 맞을 때 발밑 바닥에 남는 이펙트 (피 웅덩이 등, 한 번 재생 후 스스로 사라지는 에셋). 공격 반대 방향으로 튄다. 비우면 없음 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character|Hit")
+	TObjectPtr<UNiagaraSystem> HitGroundEffect;
+
+	/** 바닥 이펙트 크기 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Character|Hit", meta = (ClampMin = "0.01", EditCondition = "HitGroundEffect != nullptr"))
+	float HitGroundScale = 1.0f;
 
 	/**
 	 * 근접 공격에 맞았을 때 맞은 지점에서 낼 소리 (구울은 살점, 골렘은 돌·금속 등 몸 재질에 맞춘다). GameplayCue.Hit가 재생한다.

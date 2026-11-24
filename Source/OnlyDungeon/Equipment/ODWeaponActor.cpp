@@ -16,6 +16,9 @@
 #include "Equipment/ODWeaponData.h"
 #include "Character/ODCharacterBase.h"
 #include "HAL/IConsoleManager.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
+#include "TimerManager.h"
 
 namespace
 {
@@ -36,6 +39,13 @@ namespace
 	constexpr float DebugAreaLineThickness = 1.5f;
 	constexpr float DebugAreaHitSphereRadius = 20.0f;
 	constexpr int32 DebugSphereSegments = 8;
+
+	/** 궤적이 켜진 채 남지 않도록 하는 최대 유지 시간. 가장 긴 공격의 판정 구간보다 넉넉하다. */
+	constexpr float MaxTrailDuration = 1.5f;
+
+	/** 궤적 이펙트 사용자 변수 이름 (무기마다 폭·색을 채운다) */
+	const FName TrailWidthParam(TEXT("User.TrailWidth"));
+	const FName TrailColorParam(TEXT("User.TrailColor"));
 }
 
 AODWeaponActor::AODWeaponActor()
@@ -74,6 +84,56 @@ void AODWeaponActor::InitializeFromData(const UODWeaponData* InWeaponData)
 	PreviousPoints.Reserve(PointCount);
 	CurrentPoints.Reserve(PointCount);
 	HitBuffer.Reserve(ExpectedHitsPerSweep);
+
+	// 휘두르기 궤적: 칼날 가운데에 붙이고 로컬 Z축을 칼날 방향으로 둔다. (무기를 바꾸면 새로 만든다)
+	StopTrail();
+	if (IsValid(TrailComponent))
+	{
+		TrailComponent->DestroyComponent();
+		TrailComponent = nullptr;
+	}
+	if (IsValid(InWeaponData->TrailEffect))
+	{
+		TrailComponent = NewObject<UNiagaraComponent>(this, TEXT("WeaponTrail"));
+		TrailComponent->SetAsset(InWeaponData->TrailEffect);
+		TrailComponent->SetAutoActivate(false);
+		TrailComponent->SetupAttachment(MeshComponent);
+		const FVector BladeDirection = (TraceEnd - TraceStart).GetSafeNormal();
+		const FRotator BladeRotation = BladeDirection.IsNearlyZero() ? FRotator::ZeroRotator : FRotationMatrix::MakeFromZ(BladeDirection).Rotator();
+		TrailComponent->SetRelativeLocationAndRotation((TraceStart + TraceEnd) * 0.5, BladeRotation);
+		TrailComponent->SetFloatParameter(TrailWidthParam, static_cast<float>(FVector::Dist(TraceStart, TraceEnd)) * InWeaponData->TrailWidthScale);
+		TrailComponent->SetColorParameter(TrailColorParam, InWeaponData->TrailColor);
+		TrailComponent->RegisterComponent();
+	}
+}
+
+void AODWeaponActor::StartTrail()
+{
+	if (!IsValid(TrailComponent))
+	{
+		return;
+	}
+	// 연속 공격으로 이미 켜져 있으면 새 궤적으로 다시 시작하지 않고 이어 그린다.
+	if (!TrailComponent->IsActive())
+	{
+		TrailComponent->Activate(true);
+	}
+	GetWorldTimerManager().SetTimer(TrailSafetyTimer, this, &ThisClass::StopTrail, MaxTrailDuration, false);
+}
+
+void AODWeaponActor::StopTrail()
+{
+	GetWorldTimerManager().ClearTimer(TrailSafetyTimer);
+	if (IsValid(TrailComponent) && TrailComponent->IsActive())
+	{
+		TrailComponent->Deactivate();
+	}
+}
+
+void AODWeaponActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GetWorldTimerManager().ClearTimer(TrailSafetyTimer);
+	Super::EndPlay(EndPlayReason);
 }
 
 void AODWeaponActor::BeginTrace()

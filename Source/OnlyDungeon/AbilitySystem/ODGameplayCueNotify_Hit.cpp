@@ -10,6 +10,7 @@
 #include "Engine/World.h"
 #include "NiagaraSystem.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/CapsuleComponent.h"
 #include "Sound/SoundBase.h"
 #include "Character/ODCharacterBase.h"
 #include "Character/ODPlayerCharacter.h"
@@ -19,7 +20,7 @@
 bool UODGameplayCueNotify_Hit::OnExecute_Implementation(AActor* MyTarget, const FGameplayCueParameters& Parameters) const
 {
 	const AODCharacterBase* Character = Cast<AODCharacterBase>(MyTarget);
-	if (!IsValid(Character) || (!IsValid(Character->GetHitImpactEffect()) && !IsValid(Character->GetHitImpactSound())))
+	if (!IsValid(Character) || (!IsValid(Character->GetHitImpactEffect()) && !IsValid(Character->GetHitImpactSound()) && !IsValid(Character->GetHitGroundEffect())))
 	{
 		return false;
 	}
@@ -71,6 +72,16 @@ bool UODGameplayCueNotify_Hit::OnExecute_Implementation(AActor* MyTarget, const 
 	if (USoundBase* Sound = Character->GetHitImpactSound(); IsValid(Sound))
 	{
 		UGameplayStatics::PlaySoundAtLocation(MyTarget, Sound, Location);
+	}
+
+	// 바닥 이펙트: 발밑(캡슐 바닥)에 공격 반대 방향으로 눕혀 재생한다. 한 번 재생형 에셋이라 따로 멈추지 않는다.
+	if (UNiagaraSystem* GroundEffect = Character->GetHitGroundEffect(); IsValid(GroundEffect))
+	{
+		const UCapsuleComponent* Capsule = Character->GetCapsuleComponent();
+		const float HalfHeight = IsValid(Capsule) ? Capsule->GetScaledCapsuleHalfHeight() : 0.0f;
+		const FVector GroundLocation = MyTarget->GetActorLocation() - FVector(0.0, 0.0, HalfHeight);
+		const FRotator GroundRotation(0.0, Direction.GetSafeNormal2D().Rotation().Yaw, 0.0);
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(MyTarget, GroundEffect, GroundLocation, GroundRotation, FVector(Character->GetHitGroundScale()));
 	}
 
 	if (!IsValid(Character->GetHitImpactEffect()))
