@@ -12,6 +12,9 @@
 #include "AbilitySystem/Attributes/ODAttributeSet_Health.h"
 #include "AI/ODAIController.h"
 #include "Character/ODEnemyCombatComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Equipment/ODEquipmentComponent.h"
+#include "Equipment/ODWeaponActor.h"
 #include "GameplayEffect.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "NiagaraComponent.h"
@@ -47,6 +50,12 @@ namespace
 
 	/** 길찾기 비용 상한 여유. 비용은 길이와 거의 같지만 지형 비용 차이를 흡수하도록 조금 넉넉히 둔다. */
 	constexpr double AggroPathCostSlack = 1.2;
+
+	/** 시체가 가라앉는 동안 위치를 갱신하는 간격 (약 30fps면 눈에 띄는 끊김이 없다) */
+	constexpr float CorpseSinkStepInterval = 1.0f / 30.0f;
+
+	/** 가라앉기 가속 곡선 지수 (처음엔 천천히, 끝으로 갈수록 빨리) */
+	constexpr float CorpseSinkEaseExponent = 2.0f;
 }
 
 AODEnemyCharacter::AODEnemyCharacter(const FObjectInitializer& ObjectInitializer)
@@ -142,6 +151,7 @@ void AODEnemyCharacter::BeginPlay()
 void AODEnemyCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	GetWorldTimerManager().ClearTimer(NameplateTimer);
+	GetWorldTimerManager().ClearTimer(CorpseTimer);
 	if (UODAbilitySystemComponent* ASC = GetODAbilitySystemComponent(); IsValid(ASC) && HealthChangedHandle.IsValid())
 	{
 		ASC->GetGameplayAttributeValueChangeDelegate(UODAttributeSet_Health::GetHealthAttribute()).Remove(HealthChangedHandle);
@@ -229,6 +239,85 @@ void AODEnemyCharacter::HandleOutOfHealth(AActor* DamageInstigator)
 	}
 	RefreshAI(false);
 	RefreshNameplate();
+
+	// 시체 정리 예약 (SetTimer는 기존 핸들을 덮어써 중복 예약되지 않는다)
+	if (bFadeOutCorpse)
+	{
+		GetWorldTimerManager().SetTimer(CorpseTimer, this, &ThisClass::BeginCorpseSink, FMath::Max(CorpseLingerTime, KINDA_SMALL_NUMBER), false);
+	}
+}
+
+void AODEnemyCharacter::BeginCorpseSink()
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	UWorld* World = GetWorld();
+	if (!IsDead() || !IsValid(MeshComp) || !World)
+	{
+		return;
+	}
+
+	if (IsValid(CorpseDustEffect))
+	{
+		// 쓰러진 몸이 루트에서 벗어나 있을 수 있어 메시 경계 중심의 바닥 높이에 피운다.
+		const FVector DustLocation(MeshComp->Bounds.Origin.X, MeshComp->Bounds.Origin.Y, MeshComp->GetComponentLocation().Z);
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, CorpseDustEffect, DustLocation, FRotator::ZeroRotator, FVector(CorpseDustScale));
+	}
+
+	if (!bCorpseSinking)
+	{
+		CorpseMeshBaseLocation = MeshComp->GetRelativeLocation();
+		bCorpseSinking = true;
+	}
+	CorpseSinkStartTime = World->GetTimeSeconds();
+	GetWorldTimerManager().SetTimer(CorpseTimer, this, &ThisClass::UpdateCorpseSink, CorpseSinkStepInterval, true);
+	UE_LOG(LogODCombat, Verbose, TEXT("%s 시체 정리 시작"), *GetName());
+}
+
+void AODEnemyCharacter::UpdateCorpseSink()
+{
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	UWorld* World = GetWorld();
+	if (!IsDead() || !IsValid(MeshComp) || !World)
+	{
+		CancelCorpseSink();
+		return;
+	}
+
+	const float Elapsed = static_cast<float>(World->GetTimeSeconds() - CorpseSinkStartTime);
+	const float Alpha = CorpseSinkDuration > KINDA_SMALL_NUMBER ? FMath::Clamp(Elapsed / CorpseSinkDuration, 0.0f, 1.0f) : 1.0f;
+	const float Depth = CorpseSinkDepth * FMath::InterpEaseIn(0.0f, 1.0f, Alpha, CorpseSinkEaseExponent);
+	MeshComp->SetRelativeLocation(CorpseMeshBaseLocation - FVector(0.0, 0.0, Depth));
+
+	if (Alpha >= 1.0f)
+	{
+		GetWorldTimerManager().ClearTimer(CorpseTimer);
+		SetBodyHidden(true);
+	}
+}
+
+void AODEnemyCharacter::CancelCorpseSink()
+{
+	GetWorldTimerManager().ClearTimer(CorpseTimer);
+	if (bCorpseSinking)
+	{
+		if (USkeletalMeshComponent* MeshComp = GetMesh(); IsValid(MeshComp))
+		{
+			MeshComp->SetRelativeLocation(CorpseMeshBaseLocation);
+		}
+		bCorpseSinking = false;
+	}
+}
+
+void AODEnemyCharacter::SetBodyHidden(bool bHideBody)
+{
+	SetActorHiddenInGame(bHideBody);
+	if (UODEquipmentComponent* Equipment = GetEquipmentComponent(); IsValid(Equipment))
+	{
+		if (AODWeaponActor* Weapon = Equipment->GetWeaponActor(); IsValid(Weapon))
+		{
+			Weapon->SetActorHiddenInGame(bHideBody);
+		}
+	}
 }
 
 void AODEnemyCharacter::RefreshNameplate()
@@ -505,7 +594,8 @@ void AODEnemyCharacter::ClearPhaseLoopEffect()
 void AODEnemyCharacter::ApplyDefeatedState()
 {
 	DeactivateCombat();
-	SetActorHiddenInGame(true);
+	CancelCorpseSink();
+	SetBodyHidden(true);
 	SetActorEnableCollision(false);
 	if (IsValid(NameplateComponent))
 	{
@@ -515,9 +605,10 @@ void AODEnemyCharacter::ApplyDefeatedState()
 
 void AODEnemyCharacter::Revive()
 {
+	CancelCorpseSink();
 	Super::Revive();
-	// 저장에서 숨긴 처치한 보스를 테스트 초기화(F5)로 되살릴 때 다시 보이게 한다.
-	SetActorHiddenInGame(false);
+	// 정리된 시체와, 저장에서 숨긴 처치한 보스(테스트 초기화 F5)를 다시 보이게 한다.
+	SetBodyHidden(false);
 	SetActorEnableCollision(true);
 	CombatTarget.Reset();
 	ClearPhaseLoopEffect();

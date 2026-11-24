@@ -12,6 +12,7 @@
 #include "Core/ODGameMode.h"
 #include "Core/ODGameplayTags.h"
 #include "Interaction/ODInteractionComponent.h"
+#include "NiagaraComponent.h"
 
 AODRespawnPoint::AODRespawnPoint(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -25,6 +26,11 @@ AODRespawnPoint::AODRespawnPoint(const FObjectInitializer& ObjectInitializer)
 	MarkerMesh->SetupAttachment(SceneRoot);
 	MarkerMesh->SetCollisionProfileName(TEXT("NoCollision"));
 	MarkerMesh->SetCanEverAffectNavigation(false);
+
+	// 상시 타는 불이라 레벨 시작과 함께 켠다. (에셋이 없으면 아무것도 하지 않는다)
+	FireEffect = CreateDefaultSubobject<UNiagaraComponent>(TEXT("FireEffect"));
+	FireEffect->SetupAttachment(MarkerMesh);
+	FireEffect->SetAutoActivate(true);
 
 	InteractionTrigger = CreateDefaultSubobject<UBoxComponent>(TEXT("InteractionTrigger"));
 	InteractionTrigger->SetupAttachment(SceneRoot);

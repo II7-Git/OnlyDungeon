@@ -13,6 +13,7 @@ class UODAbilitySet;
 class UStaticMesh;
 class UMaterialInterface;
 class USoundBase;
+class UNiagaraSystem;
 
 /**
  * 무기 하나를 정의하는 데이터 에셋. 에셋 접두사: DA_Weapon_ (예: DA_Weapon_OneHandSword)
@@ -140,4 +141,20 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Audio")
 	TObjectPtr<USoundBase> SwingSound;
+
+	/**
+	 * 휘두를 때 칼날을 따라 남는 궤적(리본 이펙트). 무기 판정 구간 동안만 켜진다. 비우면 없음
+	 * 이펙트는 칼날 중간(TraceStart~TraceEnd 가운데)에 붙고, 로컬 Z축이 칼날 방향을 향한다.
+	 * 이펙트의 User.TrailWidth(폭)·User.TrailColor(색) 사용자 변수를 무기마다 채운다.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trail")
+	TObjectPtr<UNiagaraSystem> TrailEffect;
+
+	/** 궤적 폭 = 칼날 길이(TraceStart~TraceEnd) × 이 값 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trail", meta = (ClampMin = "0.1", EditCondition = "TrailEffect != nullptr"))
+	float TrailWidthScale = 1.0f;
+
+	/** 궤적 색 (이펙트 텍스처 색에 곱해진다) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Weapon|Trail", meta = (EditCondition = "TrailEffect != nullptr"))
+	FLinearColor TrailColor = FLinearColor::White;
 };

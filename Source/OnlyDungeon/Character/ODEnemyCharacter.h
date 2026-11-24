@@ -233,6 +233,29 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Presentation")
 	TSubclassOf<UCameraShakeBase> DeathCameraShake;
 
+	/** 쓰러진 시체를 잠시 뒤 바닥으로 가라앉혀 치운다. 보스처럼 쓰러진 자세를 남겨 둘 적은 끈다. (부활·초기화 때 원래대로) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Corpse")
+	bool bFadeOutCorpse = true;
+
+	/** 쓰러진 뒤 시체가 그대로 남아 있는 시간 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Corpse", meta = (ClampMin = "0.0", Units = "s", EditCondition = "bFadeOutCorpse"))
+	float CorpseLingerTime = 4.0f;
+
+	/** 바닥으로 가라앉는 데 걸리는 시간 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Corpse", meta = (ClampMin = "0.0", Units = "s", EditCondition = "bFadeOutCorpse"))
+	float CorpseSinkDuration = 1.5f;
+
+	/** 가라앉는 깊이 (캡슐 기준 로컬 단위, 액터 스케일이 곱해진다). 다 가라앉으면 숨긴다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Corpse", meta = (ClampMin = "0.0", Units = "cm", EditCondition = "bFadeOutCorpse"))
+	float CorpseSinkDepth = 60.0f;
+
+	/** 가라앉기 시작할 때 시체 자리에 피우는 먼지. 비우면 없음 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Corpse", meta = (EditCondition = "bFadeOutCorpse"))
+	TObjectPtr<UNiagaraSystem> CorpseDustEffect;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Corpse", meta = (ClampMin = "0.01", EditCondition = "bFadeOutCorpse"))
+	float CorpseDustScale = 1.0f;
+
 	/** 보스 페이즈 (비우면 페이즈 없음). 체력 비율이 높은 순서로 둔다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Enemy|Phase")
 	TArray<FODEnemyPhase> Phases;
@@ -287,6 +310,30 @@ private:
 	double NextAggroPathCheckTime = 0.0;
 
 	FTimerHandle NameplateTimer;
+
+	/** 시체 정리: 대기(CorpseLingerTime) 후 가라앉기 갱신까지 같은 핸들을 쓴다. */
+	FTimerHandle CorpseTimer;
+
+	/** 가라앉기 시작 시각 (월드 시간) */
+	double CorpseSinkStartTime = 0.0;
+
+	/** 가라앉기 전 메시 상대 위치 (부활 때 되돌린다) */
+	FVector CorpseMeshBaseLocation = FVector::ZeroVector;
+
+	/** 메시를 옮긴 상태인지 (되돌릴 게 있는지) */
+	bool bCorpseSinking = false;
+
+	/** 시체 먼지를 피우고 가라앉기를 시작한다. */
+	void BeginCorpseSink();
+
+	/** 가라앉기 한 단계 (짧은 반복 타이머). 끝나면 몸을 숨긴다. */
+	void UpdateCorpseSink();
+
+	/** 시체 정리를 멈추고 메시 위치를 되돌린다. (부활·초기화·EndPlay) */
+	void CancelCorpseSink();
+
+	/** 몸과 들고 있는 무기를 함께 숨기거나 보인다. (붙은 무기 액터는 액터 숨김이 전파되지 않는다) */
+	void SetBodyHidden(bool bHideBody);
 
 	TWeakObjectPtr<AODCharacterBase> CombatTarget;
 

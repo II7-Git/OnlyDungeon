@@ -10,6 +10,7 @@
 
 class UArrowComponent;
 class UBoxComponent;
+class UNiagaraComponent;
 class UPrimitiveComponent;
 class UStaticMeshComponent;
 struct FHitResult;
@@ -19,7 +20,7 @@ struct FHitResult;
  *  - 이 지점이 부활 위치로 등록된다. (사망하면 여기서 부활)
  *  - 플레이어 체력·스태미나가 회복되고, 잡몹과 보스가 모두 초기화된다.
  * 실제 처리는 게임 모드(공통 규칙)가 한다. 이 액터는 상호작용과 부활 위치만 제공한다.
- * 표식 메시는 BP(BP_ODRespawnPoint)에서 지정한다.
+ * 표식 메시와 불 이펙트(FireEffect의 에셋·위치)는 BP(BP_ODRespawnPoint)에서 지정한다.
  */
 UCLASS()
 class ONLYDUNGEON_API AODRespawnPoint : public AActor, public IODInteractable
@@ -49,6 +50,10 @@ protected:
 	/** 표식 (BP에서 메시 지정) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|RespawnPoint")
 	TObjectPtr<UStaticMeshComponent> MarkerMesh;
+
+	/** 표식 위에서 타는 불 (화톳불). 에셋은 BP에서 지정하고, 비우면 켜지지 않는다. 빛은 이펙트의 광원 이미터가 낸다. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|RespawnPoint")
+	TObjectPtr<UNiagaraComponent> FireEffect;
 
 	/** 상호작용 범위 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|RespawnPoint")

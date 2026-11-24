@@ -8,6 +8,7 @@
 
 class UODWeaponData;
 class UStaticMeshComponent;
+class UNiagaraComponent;
 
 /**
  * 캐릭터 손에 붙는 무기. 메시 표시와 무기 궤적 판정을 담당한다.
@@ -42,7 +43,15 @@ public:
 
 	UStaticMeshComponent* GetMeshComponent() const { return MeshComponent; }
 
+	/** 휘두르기 궤적을 켠다. (판정 구간 시작) 끝 알림이 빠져도 MaxTrailDuration 뒤에 스스로 꺼진다. */
+	void StartTrail();
+
+	/** 휘두르기 궤적을 끈다. 이미 그려진 궤적은 수명대로 사라진다. (판정 구간 끝·공격 취소·사망) */
+	void StopTrail();
+
 protected:
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
 	/** 무기 메시 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Weapon")
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
@@ -74,6 +83,13 @@ private:
 
 	/** 스윕 결과 재사용 버퍼 */
 	TArray<FHitResult> HitBuffer;
+
+	/** 휘두르기 궤적 (무기 데이터에 TrailEffect가 있을 때만 만든다). 장착 때 한 번 만들고 켜고 끄며 재사용한다. */
+	UPROPERTY()
+	TObjectPtr<UNiagaraComponent> TrailComponent;
+
+	/** 끝 알림 없이 켜진 궤적을 끄는 안전 타이머 */
+	FTimerHandle TrailSafetyTimer;
 
 	/** 한 구간에서 이미 맞은 대상. 한 번 휘두르기에 맞는 수가 적어 인라인 배열의 선형 검색이 가장 싸다. */
 	TArray<TWeakObjectPtr<AActor>, TInlineAllocator<8>> HitActors;
