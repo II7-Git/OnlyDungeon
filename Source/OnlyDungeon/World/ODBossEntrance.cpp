@@ -109,14 +109,20 @@ void AODBossEntrance::ApplyDoorLayout()
 	// 경첩은 문 양끝, 문짝은 경첩에서 문 가운데 쪽으로 반 폭만큼
 	LeftHinge->SetRelativeLocation(FVector(0.0, -HalfWidth, 0.0));
 	RightHinge->SetRelativeLocation(FVector(0.0, HalfWidth, 0.0));
-	const FVector LeafScale(DoorThickness / BasicShapeSize, HalfWidth / BasicShapeSize, DoorHeight / BasicShapeSize);
-	LeftDoor->SetRelativeLocation(FVector(0.0, HalfWidth * 0.5, DoorHeight * 0.5));
-	LeftDoor->SetRelativeScale3D(LeafScale);
-	RightDoor->SetRelativeLocation(FVector(0.0, -HalfWidth * 0.5, DoorHeight * 0.5));
-	RightDoor->SetRelativeScale3D(LeafScale);
+	if (bFitBasicShapeDoors)
+	{
+		const FVector LeafScale(DoorThickness / BasicShapeSize, HalfWidth / BasicShapeSize, DoorHeight / BasicShapeSize);
+		LeftDoor->SetRelativeLocation(FVector(0.0, HalfWidth * 0.5, DoorHeight * 0.5));
+		LeftDoor->SetRelativeScale3D(LeafScale);
+		RightDoor->SetRelativeLocation(FVector(0.0, -HalfWidth * 0.5, DoorHeight * 0.5));
+		RightDoor->SetRelativeScale3D(LeafScale);
 
-	Lintel->SetRelativeLocation(FVector(0.0, 0.0, DoorHeight + LintelHeight * 0.5));
-	Lintel->SetRelativeScale3D(FVector(LintelDepth / BasicShapeSize, (DoorWidth + LintelOverhang) / BasicShapeSize, LintelHeight / BasicShapeSize));
+		Lintel->SetRelativeLocation(FVector(0.0, 0.0, DoorHeight + LintelHeight * 0.5));
+		Lintel->SetRelativeScale3D(FVector(LintelDepth / BasicShapeSize, (DoorWidth + LintelOverhang) / BasicShapeSize, LintelHeight / BasicShapeSize));
+	}
+	// 실제 문 메시를 쓸 때는 문틀이 위를 덮으므로 상인방이 필요 없다.
+	Lintel->SetVisibility(bFitBasicShapeDoors);
+	Lintel->SetCollisionEnabled(bFitBasicShapeDoors ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
 
 	// 안개판(판 메시를 세운 것: X = 높이, Y = 폭)은 문짝 뒤 통로 안에 둔다.
 	const double FogHeight = DoorHeight + FogMargin;
