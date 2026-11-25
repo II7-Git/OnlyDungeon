@@ -92,6 +92,15 @@ private:
 
 	void StartHealing();
 	void ApplyHealTick();
+
+	/** Amount만큼 회복 GE를 자신에게 적용한다. */
+	void ApplyHeal(float Amount);
+
+	/**
+	 * 끝까지 마셨을 때 아직 들어오지 않은 회복을 한 번에 넣는다.
+	 * 프레임이 느리면 마지막 회복 틱과 몽타주 종료가 한 프레임에 겹쳐 종료가 먼저 처리되므로 남은 양을 버리지 않게 한다. (피격으로 끊긴 경우는 부르지 않는다)
+	 */
+	void FlushRemainingHeal();
 	void StopHealing();
 	void HandleHealthChanged(const FOnAttributeChangeData& ChangeData);
 

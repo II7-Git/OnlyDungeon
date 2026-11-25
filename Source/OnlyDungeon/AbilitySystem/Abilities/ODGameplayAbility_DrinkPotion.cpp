@@ -167,13 +167,33 @@ void UODGameplayAbility_DrinkPotion::ApplyHealTick()
 
 	const float Amount = FMath::Min(HealPerTick, RemainingHeal);
 	RemainingHeal -= Amount;
+	ApplyHeal(Amount);
+}
 
+void UODGameplayAbility_DrinkPotion::ApplyHeal(float Amount)
+{
+	if (Amount <= KINDA_SMALL_NUMBER || !HealEffectClass)
+	{
+		return;
+	}
 	const FGameplayEffectSpecHandle SpecHandle = MakeOutgoingGameplayEffectSpec(HealEffectClass, GetAbilityLevel());
 	if (SpecHandle.IsValid())
 	{
 		SpecHandle.Data->SetSetByCallerMagnitude(ODGameplayTags::Data_Heal, Amount);
 		ApplyGameplayEffectSpecToOwner(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, SpecHandle);
 	}
+}
+
+void UODGameplayAbility_DrinkPotion::FlushRemainingHeal()
+{
+	if (!IsActive() || RemainingHeal <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+	const float Amount = RemainingHeal;
+	RemainingHeal = 0.0f;
+	ApplyHeal(Amount);
+	UE_LOG(LogODAbility, Verbose, TEXT("[%s] 마시기 종료 시 남은 회복 %.1f 적용"), *GetName(), Amount);
 }
 
 void UODGameplayAbility_DrinkPotion::StopHealing()
@@ -204,6 +224,8 @@ void UODGameplayAbility_DrinkPotion::HandleHealthChanged(const FOnAttributeChang
 
 void UODGameplayAbility_DrinkPotion::OnMontageFinished()
 {
+	// 끝까지 마셨으면 회복량을 모두 받는다. (피격 중단은 HandleHealthChanged가 먼저 끝내므로 여기 오지 않는다)
+	FlushRemainingHeal();
 	EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, true, false);
 }
 
