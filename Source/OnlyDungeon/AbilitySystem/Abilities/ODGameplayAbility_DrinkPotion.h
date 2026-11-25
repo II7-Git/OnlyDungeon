@@ -8,6 +8,8 @@
 
 class UAnimMontage;
 class UGameplayEffect;
+class UNiagaraComponent;
+class UNiagaraSystem;
 class UODPotionComponent;
 class UStaticMesh;
 class UStaticMeshComponent;
@@ -19,7 +21,8 @@ struct FOnAttributeChangeData;
  * - HealStartDelay 뒤부터 HealDuration 동안 나눠서 회복한다. 총 회복량 = 최대 체력 × 물약 회복 비율(기본 60%).
  *   회복은 즉시 적용 GE(HealEffectClass, SetByCaller Data.Heal)를 틱마다 적용한다. (Attribute 변경은 GE로만)
  * - 마시는 도중 피해를 입거나(체력 감소) 경직 등으로 몽타주가 끊기면 즉시 끝나고 회복도 멈춘다. 소모한 물약은 돌아오지 않는다.
- * - 마시는 동안 천천히만 걸을 수 있고(MoveSpeedMultiplier), 공격·회피·방어(Ability.Action)는 막힌다.
+ * - 마시는 동안 평소 걸음으로 걸을 수 있고, 달리기·공격·회피·방어(Ability.Action)는 막힌다. (달리기는 State.Drinking으로 막힌다)
+ * - 회복이 들어오는 동안 몸에 회복 이펙트(HealVisualEffect)를 띄워 마시고 있음을 보여 준다. 회복이 끝나거나 끊기면 멈춘다.
  * - 마시는 동안 무기를 숨기고, 물약 병 메시(PotionMesh)를 손 소켓에 붙였다가 끝나면 없앤다.
  */
 UCLASS(Abstract)
@@ -58,9 +61,16 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Potion", meta = (ClampMin = "0.02", Units = "s"))
 	float HealTickInterval = 0.1f;
 
-	/** 마시는 동안 이동 속도 배율 */
-	UPROPERTY(EditDefaultsOnly, Category = "OD|Potion", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float MoveSpeedMultiplier = 0.3f;
+	/** 회복이 들어오는 동안 몸에 붙여 재생할 이펙트. 비우면 없음 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Potion|Effect")
+	TObjectPtr<UNiagaraSystem> HealVisualEffect;
+
+	/** 이펙트를 붙일 캐릭터 메시 소켓(본). 비우면 메시 원점(발밑) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Potion|Effect")
+	FName HealVisualSocket;
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Potion|Effect", meta = (ClampMin = "0.01"))
+	float HealVisualScale = 1.0f;
 
 	/**
 	 * 마시는 동안 손에 드는 물약 병. 비우면 빈손으로 마신다.
@@ -99,8 +109,8 @@ private:
 	float RemainingHeal = 0.0f;
 	float HealPerTick = 0.0f;
 
-	/** 줄이기 전 이동 속도 (끝날 때 복구) */
-	float SavedMaxWalkSpeed = -1.0f;
+	/** 회복 이펙트 (회복이 끝나거나 끊기면 새 입자를 멈추고, 남은 입자가 사라지면 스스로 제거된다) */
+	TWeakObjectPtr<UNiagaraComponent> HealVisualComponent;
 
 	/** 마시는 동안 숨긴 무기 (끝날 때 다시 보이게). 무기 종류와 관계없이 같은 모션을 쓰기 위해 숨긴다. */
 	TWeakObjectPtr<AActor> HiddenWeapon;

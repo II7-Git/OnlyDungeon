@@ -8,7 +8,9 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
-#include "GameFramework/CharacterMovementComponent.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "GameplayEffect.h"
 #include "TimerManager.h"
 #include "AbilitySystem/ODAbilitySystemComponent.h"
@@ -79,13 +81,6 @@ void UODGameplayAbility_DrinkPotion::ActivateAbility(const FGameplayAbilitySpecH
 	// 피해를 입으면 마시기를 멈춘다.
 	HealthChangedHandle = ASC->GetGameplayAttributeValueChangeDelegate(UODAttributeSet_Health::GetHealthAttribute()).AddUObject(this, &ThisClass::HandleHealthChanged);
 
-	// 마시는 동안 천천히만 걷는다.
-	if (const AODCharacterBase* Character = GetODCharacterFromActorInfo(); IsValid(Character) && IsValid(Character->GetCharacterMovement()))
-	{
-		SavedMaxWalkSpeed = Character->GetCharacterMovement()->MaxWalkSpeed;
-		Character->GetCharacterMovement()->MaxWalkSpeed = SavedMaxWalkSpeed * MoveSpeedMultiplier;
-	}
-
 	// 무기와 관계없이 같은 마시기 모션을 쓰므로 마시는 동안 무기를 숨긴다.
 	if (const AActor* Avatar = GetAvatarActorFromActorInfo(); IsValid(Avatar))
 	{
@@ -147,6 +142,14 @@ void UODGameplayAbility_DrinkPotion::StartHealing()
 	{
 		Avatar->GetWorldTimerManager().SetTimer(HealTickHandle, this, &ThisClass::ApplyHealTick, HealTickInterval, true, 0.0f);
 	}
+
+	// 회복이 들어오기 시작하는 순간 몸에 회복 이펙트를 띄운다. (중복 방지: 이미 떠 있으면 그대로 둔다)
+	const AODCharacterBase* Character = GetODCharacterFromActorInfo();
+	if (IsValid(HealVisualEffect) && !HealVisualComponent.IsValid() && IsValid(Character) && IsValid(Character->GetMesh()))
+	{
+		HealVisualComponent = UNiagaraFunctionLibrary::SpawnSystemAttached(HealVisualEffect, Character->GetMesh(), HealVisualSocket, FVector::ZeroVector, FRotator::ZeroRotator,
+			FVector(HealVisualScale), EAttachLocation::SnapToTarget, true, ENCPoolMethod::None);
+	}
 }
 
 void UODGameplayAbility_DrinkPotion::ApplyHealTick()
@@ -180,6 +183,13 @@ void UODGameplayAbility_DrinkPotion::StopHealing()
 		Avatar->GetWorldTimerManager().ClearTimer(HealStartHandle);
 		Avatar->GetWorldTimerManager().ClearTimer(HealTickHandle);
 	}
+
+	// 새 입자만 멈추고 남은 입자는 자연스럽게 사라지게 한다. (SpawnSystemAttached의 자동 제거)
+	if (UNiagaraComponent* Effect = HealVisualComponent.Get())
+	{
+		Effect->Deactivate();
+	}
+	HealVisualComponent.Reset();
 }
 
 void UODGameplayAbility_DrinkPotion::HandleHealthChanged(const FOnAttributeChangeData& ChangeData)
@@ -212,15 +222,6 @@ void UODGameplayAbility_DrinkPotion::EndAbility(const FGameplayAbilitySpecHandle
 		ASC->GetGameplayAttributeValueChangeDelegate(UODAttributeSet_Health::GetHealthAttribute()).Remove(HealthChangedHandle);
 	}
 	HealthChangedHandle.Reset();
-
-	if (SavedMaxWalkSpeed >= 0.0f)
-	{
-		if (const AODCharacterBase* Character = GetODCharacterFromActorInfo(); IsValid(Character) && IsValid(Character->GetCharacterMovement()))
-		{
-			Character->GetCharacterMovement()->MaxWalkSpeed = SavedMaxWalkSpeed;
-		}
-		SavedMaxWalkSpeed = -1.0f;
-	}
 
 	if (AActor* Weapon = HiddenWeapon.Get())
 	{
