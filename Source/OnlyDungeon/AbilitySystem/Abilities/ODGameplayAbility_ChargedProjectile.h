@@ -10,7 +10,36 @@ class AODFireProjectile;
 class UAnimMontage;
 class UGameplayEffect;
 class UNiagaraComponent;
+class UNiagaraSystem;
 class USoundBase;
+
+/** 차징하는 동안 몸에 붙여 키우는 연출 이펙트 하나 */
+USTRUCT(BlueprintType)
+struct FODChargeEffect
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Fireball")
+	TObjectPtr<UNiagaraSystem> System;
+
+	/** 발사 소켓 기준 위치 (소켓 로컬 공간) */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Fireball")
+	FVector Offset = FVector::ZeroVector;
+
+	/**
+	 * 크기를 키울 이펙트 사용자 변수 (예: User.Size). 로컬 공간 스프라이트처럼 컴포넌트 크기를 따르지 않는 이펙트에 쓴다.
+	 * 비우면 컴포넌트 크기(Scale)로 키운다.
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Fireball")
+	FName SizeParameter;
+
+	/** 차징 시작·끝 크기. 차징하는 동안 이 사이로 커진다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Fireball", meta = (ClampMin = "0.01"))
+	float StartScale = 0.3f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Fireball", meta = (ClampMin = "0.01"))
+	float EndScale = 1.0f;
+};
 
 /**
  * 몸의 페이즈 불꽃(AODEnemyCharacter::GetPhaseLoopEffect)을 ChargeTime 동안 키우며 대상 쪽으로 몸을 돌린 뒤,
@@ -50,6 +79,10 @@ protected:
 	/** 차징이 끝날 때 몸 불꽃의 크기 배율 (원래 크기 1에서 점점 커진다) */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Fireball", meta = (ClampMin = "1.0"))
 	float ChargeEffectMaxScale = 2.5f;
+
+	/** 차징하는 동안 발사 소켓에 붙여 함께 키우는 이펙트 (불덩이가 모이는 연출). 발사·끊김 때 사라진다. 투사체는 첫 이펙트 자리에서 나간다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Fireball", meta = (TitleProperty = "System"))
+	TArray<FODChargeEffect> ChargeEffects;
 
 	/** 차징 중 대상 쪽으로 도는 속도. 발사 순간 방향이 고정된다. */
 	UPROPERTY(EditDefaultsOnly, Category = "OD|Fireball", meta = (ClampMin = "0.0", Units = "deg"))
@@ -99,7 +132,7 @@ private:
 	/** 후딜 끝 */
 	void FinishRecovery();
 
-	/** 몸 불꽃 크기를 원래대로 */
+	/** 몸 불꽃 크기를 원래대로, 차징 연출 이펙트는 끈다. */
 	void RestoreChargeEffect();
 
 	UFUNCTION()
@@ -108,6 +141,9 @@ private:
 	/** 크기를 바꾼 몸 불꽃과 원래 크기 */
 	TWeakObjectPtr<UNiagaraComponent> ChargeEffect;
 	FVector ChargeEffectBaseScale = FVector::OneVector;
+
+	/** 차징 연출로 띄운 이펙트 (ChargeEffects와 같은 순서). 수가 적어 인라인 배열로 둔다. */
+	TArray<TWeakObjectPtr<UNiagaraComponent>, TInlineAllocator<4>> SpawnedChargeEffects;
 
 	double ChargeStartTime = 0.0;
 	bool bFired = false;

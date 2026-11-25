@@ -14,12 +14,31 @@ class UProjectileMovementComponent;
 class USoundBase;
 class USphereComponent;
 
+/** 투사체 몸에 겹쳐 붙이는 이펙트 하나 */
+USTRUCT(BlueprintType)
+struct FODProjectileLayer
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Projectile")
+	TObjectPtr<UNiagaraSystem> System;
+
+	/** 크기. SizeParameter가 있으면 그 사용자 변수(예: User.Size)에, 없으면 컴포넌트 크기에 쓴다. */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Projectile", meta = (ClampMin = "0.01"))
+	float Scale = 1.0f;
+
+	/** 컴포넌트 크기를 따르지 않는 이펙트(로컬 공간 스프라이트 등)의 크기 사용자 변수 */
+	UPROPERTY(EditDefaultsOnly, Category = "OD|Projectile")
+	FName SizeParameter;
+};
+
 /**
  * 정해진 지점으로 포물선을 그리며 날아가 터지는 불꽃 투사체.
  * - 쏜 어빌리티가 피해 GE 스펙을 넘겨주고(Launch), 터질 때 반경 안의 다른 팀 캐릭터에게 한 번씩 적용한다.
  * - 대상을 따라가지 않는다. 발사 순간의 착탄 지점으로 FlightTime 동안 날아가므로 굴러서 피할 수 있다.
  * - 날아가는 동안 착탄 지점에 경고 이펙트를 띄운다.
  * - 땅·벽·캐릭터에 닿거나 MaxLifetime이 지나면 그 자리에서 터진다. (쏜 보스가 죽어도 그대로 터진다)
+ * - 메시 없이 이펙트만으로 몸을 이룬다: BodyEffect + BodyLayers(겹쳐 붙이는 이펙트). 터지면 그 자리에 멈춰 새 입자만 끊고, 남은 불꽃·꼬리가 사라진 뒤 제거된다.
  * 틱하지 않는다. 이동은 투사체 이동 컴포넌트가 한다. 연출 에셋은 BP(BP_Projectile_*)에서 지정한다.
  */
 UCLASS(Abstract)
@@ -51,6 +70,10 @@ protected:
 	/** 날아가는 불덩이 이펙트 (에셋은 BP에서 지정) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "OD|Projectile")
 	TObjectPtr<UNiagaraComponent> BodyEffect;
+
+	/** 불덩이 몸에 겹쳐 붙이는 이펙트 (불꽃 핵·불티·꼬리 등). 발사할 때 붙이고 터질 때 떼어 낸다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Projectile", meta = (TitleProperty = "System"))
+	TArray<FODProjectileLayer> BodyLayers;
 
 	/** 날아가는 동안 착탄 지점에 띄우는 경고 이펙트 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "OD|Projectile|Warning")
@@ -94,6 +117,12 @@ private:
 	FGameplayEffectSpecHandle DamageSpec;
 	float Radius = 300.0f;
 	bool bExploded = false;
+
+	/** 터질 때 몸 이펙트의 새 입자만 멈춘다. (남은 입자는 FadeOutTime 동안 자연스럽게 사라진다) */
+	void ReleaseBodyEffects();
+
+	/** 발사할 때 붙인 겹침 이펙트 */
+	TArray<TWeakObjectPtr<UNiagaraComponent>, TInlineAllocator<4>> SpawnedLayers;
 
 	/** 착탄 지점 경고 이펙트 (터질 때 끈다) */
 	TWeakObjectPtr<UNiagaraComponent> WarningComponent;

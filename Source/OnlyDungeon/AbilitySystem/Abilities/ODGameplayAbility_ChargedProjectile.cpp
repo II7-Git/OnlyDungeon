@@ -11,6 +11,8 @@
 #include "GameplayEffect.h"
 #include "Kismet/GameplayStatics.h"
 #include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "Sound/SoundBase.h"
 #include "TimerManager.h"
 #include "AbilitySystem/ODFireProjectile.h"
@@ -63,6 +65,25 @@ void UODGameplayAbility_ChargedProjectile::ActivateAbility(const FGameplayAbilit
 		}
 	}
 
+	// 차징 연출: 발사 소켓에 붙여 작은 크기로 시작한다. (TickCharge가 키운다)
+	SpawnedChargeEffects.Reset();
+	if (USkeletalMeshComponent* Mesh = Character->GetMesh(); IsValid(Mesh))
+	{
+		for (const FODChargeEffect& Entry : ChargeEffects)
+		{
+			const bool bUseParameter = !Entry.SizeParameter.IsNone();
+			UNiagaraComponent* Spawned = IsValid(Entry.System)
+				? UNiagaraFunctionLibrary::SpawnSystemAttached(Entry.System, Mesh, LaunchSocket, Entry.Offset, FRotator::ZeroRotator,
+					FVector(bUseParameter ? 1.0f : Entry.StartScale), EAttachLocation::KeepRelativeOffset, true, ENCPoolMethod::None)
+				: nullptr;
+			if (IsValid(Spawned) && bUseParameter)
+			{
+				Spawned->SetFloatParameter(Entry.SizeParameter, Entry.StartScale);
+			}
+			SpawnedChargeEffects.Add(Spawned);
+		}
+	}
+
 	if (IsValid(ChargeMontage))
 	{
 		UAbilityTask_PlayMontageAndWait* Task = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(this, NAME_None, ChargeMontage, MontagePlayRate);
@@ -97,6 +118,22 @@ void UODGameplayAbility_ChargedProjectile::TickCharge()
 	{
 		Effect->SetRelativeScale3D(ChargeEffectBaseScale * FMath::Lerp(1.0f, ChargeEffectMaxScale, Alpha));
 	}
+	for (int32 Index = 0; Index < SpawnedChargeEffects.Num() && ChargeEffects.IsValidIndex(Index); ++Index)
+	{
+		if (UNiagaraComponent* Effect = SpawnedChargeEffects[Index].Get())
+		{
+			const FODChargeEffect& Entry = ChargeEffects[Index];
+			const float Size = FMath::Lerp(Entry.StartScale, Entry.EndScale, Alpha);
+			if (Entry.SizeParameter.IsNone())
+			{
+				Effect->SetRelativeScale3D(FVector(Size));
+			}
+			else
+			{
+				Effect->SetFloatParameter(Entry.SizeParameter, Size);
+			}
+		}
+	}
 
 	// 대상 쪽으로 천천히 돈다. (발사 순간 고정되므로 마지막까지 따라오되 급회전은 하지 않는다)
 	if (const AActor* Target = Character->GetLockOnTarget(); IsValid(Target) && TurnRate > 0.0f)
@@ -121,6 +158,17 @@ void UODGameplayAbility_ChargedProjectile::Fire()
 	}
 	bFired = true;
 	World->GetTimerManager().ClearTimer(ChargeTickTimer);
+
+	// 발사 위치: 차징 불덩이가 모인 자리(첫 차징 연출 이펙트). 없으면 발사 소켓, 그것도 없으면 몸 중심
+	USkeletalMeshComponent* Mesh = Character->GetMesh();
+	FVector LaunchLocation = IsValid(Mesh) && !LaunchSocket.IsNone() ? Mesh->GetSocketLocation(LaunchSocket) : Character->GetActorLocation();
+	if (!SpawnedChargeEffects.IsEmpty())
+	{
+		if (const UNiagaraComponent* Gathered = SpawnedChargeEffects[0].Get())
+		{
+			LaunchLocation = Gathered->GetComponentLocation();
+		}
+	}
 	RestoreChargeEffect();
 
 	// 착탄 지점: 지금 대상의 발밑. 대상이 없으면 쏘지 않고 후딜만 한다.
@@ -132,9 +180,6 @@ void UODGameplayAbility_ChargedProjectile::Fire()
 		{
 			TargetLocation.Z -= TargetCharacter->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 		}
-
-		USkeletalMeshComponent* Mesh = Character->GetMesh();
-		const FVector LaunchLocation = IsValid(Mesh) && !LaunchSocket.IsNone() ? Mesh->GetSocketLocation(LaunchSocket) : Character->GetActorLocation();
 
 		FActorSpawnParameters Params;
 		Params.Owner = Character;
@@ -194,6 +239,16 @@ void UODGameplayAbility_ChargedProjectile::RestoreChargeEffect()
 		Effect->SetRelativeScale3D(ChargeEffectBaseScale);
 	}
 	ChargeEffect.Reset();
+
+	// 차징 연출은 새 입자만 멈추고, 남은 입자가 사라지면 스스로 제거된다. (SpawnSystemAttached의 자동 제거)
+	for (const TWeakObjectPtr<UNiagaraComponent>& Weak : SpawnedChargeEffects)
+	{
+		if (UNiagaraComponent* Effect = Weak.Get())
+		{
+			Effect->Deactivate();
+		}
+	}
+	SpawnedChargeEffects.Reset();
 }
 
 void UODGameplayAbility_ChargedProjectile::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)

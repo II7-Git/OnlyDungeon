@@ -30,6 +30,9 @@ namespace ODFireProjectile
 
 	/** 폭발 한 번에 맞을 수 있는 캐릭터 수 예상치 (싱글플레이라 작다) */
 	constexpr int32 ExpectedVictims = 4;
+
+	/** 터진 뒤 남은 불꽃 입자가 사라질 때까지 액터를 남겨 두는 시간 */
+	constexpr float FadeOutTime = 1.5f;
 }
 
 AODFireProjectile::AODFireProjectile()
@@ -85,6 +88,22 @@ void AODFireProjectile::Launch(const FGameplayEffectSpecHandle& InDamageSpec, co
 	Movement->OnProjectileStop.AddUniqueDynamic(this, &ThisClass::OnProjectileStop);
 	Movement->Activate(true);
 
+	SpawnedLayers.Reset();
+	for (const FODProjectileLayer& Layer : BodyLayers)
+	{
+		if (IsValid(Layer.System))
+		{
+			const bool bUseParameter = !Layer.SizeParameter.IsNone();
+			UNiagaraComponent* Spawned = UNiagaraFunctionLibrary::SpawnSystemAttached(Layer.System, Collision, NAME_None, FVector::ZeroVector, FRotator::ZeroRotator,
+				FVector(bUseParameter ? 1.0f : Layer.Scale), EAttachLocation::KeepRelativeOffset, true, ENCPoolMethod::None);
+			if (IsValid(Spawned) && bUseParameter)
+			{
+				Spawned->SetFloatParameter(Layer.SizeParameter, Layer.Scale);
+			}
+			SpawnedLayers.Add(Spawned);
+		}
+	}
+
 	if (IsValid(WarningEffect))
 	{
 		WarningComponent = UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, WarningEffect, TargetLocation, FRotator::ZeroRotator, FVector(WarningScale));
@@ -116,6 +135,7 @@ void AODFireProjectile::Explode(const FVector& Location)
 	{
 		Warning->Deactivate();
 	}
+	ReleaseBodyEffects();
 
 	UWorld* World = GetWorld();
 	AActor* Shooter = GetInstigator();
@@ -173,7 +193,28 @@ void AODFireProjectile::Explode(const FVector& Location)
 		UGameplayStatics::PlayWorldCameraShake(this, ExplosionShake, Location, 0.0f, ExplosionShakeRadius, 1.0f, false);
 	}
 
-	Destroy();
+	// 바로 지우지 않고 멈춰 둔 채 남은 입자가 사라질 시간을 준다. (충돌·이동은 즉시 끈다)
+	Movement->StopMovementImmediately();
+	Movement->Deactivate();
+	Collision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	SetLifeSpan(ODFireProjectile::FadeOutTime);
+}
+
+void AODFireProjectile::ReleaseBodyEffects()
+{
+	// 새 입자만 멈춘다. 액터는 FadeOutTime 뒤에 사라지므로 그동안 남은 불꽃·꼬리가 자연스럽게 사라진다.
+	if (IsValid(BodyEffect))
+	{
+		BodyEffect->Deactivate();
+	}
+	for (const TWeakObjectPtr<UNiagaraComponent>& Weak : SpawnedLayers)
+	{
+		if (UNiagaraComponent* Effect = Weak.Get())
+		{
+			Effect->Deactivate();
+		}
+	}
+	SpawnedLayers.Reset();
 }
 
 void AODFireProjectile::EndPlay(const EEndPlayReason::Type EndPlayReason)
