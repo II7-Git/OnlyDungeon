@@ -44,15 +44,15 @@ namespace
 	/** 가드가 깨질 때 줄 강인도 피해 (강인도를 0으로 만들어 경직시키기 위한 큰 값) */
 	constexpr float GuardBreakPoiseDamage = 9999.0f;
 
-	/** 공격자가 피격자의 정면에 있는지 */
-	bool IsAttackFromFront(const AActor* Target, const AActor* Attacker)
+	/** 공격이 날아온 지점(AttackOrigin)이 피격자의 정면에 있는지 */
+	bool IsAttackFromFront(const AActor* Target, const FVector& AttackOrigin)
 	{
-		if (!IsValid(Target) || !IsValid(Attacker))
+		if (!IsValid(Target))
 		{
 			return false;
 		}
 
-		FVector ToAttacker = Attacker->GetActorLocation() - Target->GetActorLocation();
+		FVector ToAttacker = AttackOrigin - Target->GetActorLocation();
 		ToAttacker.Z = 0.0f;
 		if (!ToAttacker.Normalize())
 		{
@@ -101,10 +101,17 @@ void UODDamageExecution::Execute_Implementation(const FGameplayEffectCustomExecu
 		return;
 	}
 
-	const bool bFromFront = IsAttackFromFront(TargetActor, SourceActor);
+	// 공격 방향 기준점: 투사체 폭발처럼 컨텍스트에 원점이 있으면 그 지점, 없으면 공격자 위치
+	const FGameplayEffectContextHandle& Context = Spec.GetEffectContext();
+	const bool bHasOrigin = Context.HasOrigin();
+	const bool bFromFront = (bHasOrigin || IsValid(SourceActor)) && IsAttackFromFront(TargetActor, bHasOrigin ? Context.GetOrigin() : SourceActor->GetActorLocation());
+
+	// 패링으로 막을 수 없는 피해 (투사체·폭발): 패링 판정을 건너뛰고 방어·피해 계산으로 간다.
+	const bool bUnparryable = Spec.GetDynamicAssetTags().HasTagExact(ODGameplayTags::Damage_Unparryable)
+		|| (Spec.Def && Spec.Def->GetAssetTags().HasTagExact(ODGameplayTags::Damage_Unparryable));
 
 	// 2) 패링 성공: 피해 없음, 공격자는 경직(강인도 붕괴 이벤트), 방어자에게 패링 성공 이벤트
-	if (IsValid(TargetASC) && bFromFront && TargetASC->HasMatchingGameplayTag(ODGameplayTags::State_Parrying))
+	if (IsValid(TargetASC) && bFromFront && !bUnparryable && TargetASC->HasMatchingGameplayTag(ODGameplayTags::State_Parrying))
 	{
 		UE_LOG(LogODCombat, Log, TEXT("패링 성공: %s ← %s"), *GetNameSafe(TargetActor), *GetNameSafe(SourceActor));
 		SendEvent(TargetASC, ODGameplayTags::Event_ParrySuccess, SourceActor, TargetActor);

@@ -132,6 +132,9 @@ public:
 
 	UODEnemyCombatComponent* GetCombatComponent() const { return CombatComponent; }
 
+	/** 지금 페이즈의 몸 지속 이펙트 (2페이즈 분노 불꽃 등). 없으면 nullptr. 패턴이 잠시 크기를 바꿀 때 쓴다. */
+	UNiagaraComponent* GetPhaseLoopEffect() const { return PhaseLoopComponent; }
+
 	EODEnemyIdleBehavior GetIdleBehavior() const { return IdleBehavior; }
 	int32 GetNumPatrolPoints() const { return PatrolPoints.Num(); }
 	/** 순찰 지점의 월드 위치 (PatrolPoints는 시작 위치 기준) */
