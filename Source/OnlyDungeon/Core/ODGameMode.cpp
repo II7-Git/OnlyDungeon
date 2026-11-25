@@ -22,6 +22,7 @@
 #include "Core/ODFieldSubsystem.h"
 #include "Core/ODLogChannels.h"
 #include "World/ODBossEntrance.h"
+#include "World/ODBossGate.h"
 #include "World/ODRespawnPoint.h"
 
 namespace ODGameModeTest
@@ -453,6 +454,15 @@ void AODGameMode::ResetWorldState(bool bForgetDefeatedBosses)
 
 	// 2) 보스방 입구: 문을 닫힌 처음 상태로 (들어가 있던 플레이어는 문 앞으로 옮겨진다)
 	for (TActorIterator<AODBossEntrance> It(World); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			It->ResetForTest();
+		}
+	}
+
+	// 2-1) 보스방 출구 문: 닫힌 상태로 (보스를 처치했으면 바로 다시 열 수 있다)
+	for (TActorIterator<AODBossGate> It(World); It; ++It)
 	{
 		if (IsValid(*It))
 		{

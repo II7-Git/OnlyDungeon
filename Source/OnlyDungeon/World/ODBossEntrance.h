@@ -145,6 +145,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Door", meta = (ClampMin = "1.0", Units = "cm"))
 	float DoorThickness = 20.0f;
 
+	/**
+	 * 문짝·상인방을 기본 도형(큐브) 크기에 맞춰 늘린다. 실제 문 메시(예: Medieval Dungeon 큰 문)를 쓰면 끄고,
+	 * 문짝 메시의 위치·크기는 BP·배치 인스턴스에서 직접 정한다. 이때 상인방은 숨긴다. (경첩·안개·상호작용 범위는 그대로 DoorWidth·DoorHeight를 따른다)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Door")
+	bool bFitBasicShapeDoors = true;
+
 	/** 문 위 상인방 높이 (문짝 위를 덮어 틈을 막는다) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "OD|BossEntrance|Door", meta = (ClampMin = "1.0", Units = "cm"))
 	float LintelHeight = 100.0f;
