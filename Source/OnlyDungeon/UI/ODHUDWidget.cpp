@@ -49,9 +49,10 @@
 
 namespace ODHUD
 {
+	/** 배포(Shipping) 빌드에서는 기본으로 끈다. (Shipping은 콘솔도 없어 켤 수 없음) */
 	static TAutoConsoleVariable<bool> CVarShowDebug(
 		TEXT("OD.Debug.HUD"),
-		true,
+		!UE_BUILD_SHIPPING,
 		TEXT("HUD 오른쪽 위 테스트 정보(상태 태그, 몽타주, 강인도, 발동 실패 원인) 표시"));
 
 	constexpr float LagTickInterval = 1.0f / 30.0f;

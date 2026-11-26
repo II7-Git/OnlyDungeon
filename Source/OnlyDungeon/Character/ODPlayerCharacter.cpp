@@ -131,11 +131,13 @@ void AODPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 		EIC->BindAction(LookAction, ETriggerEvent::Triggered, this, &ThisClass::Input_Look);
 	}
 
-	// [테스트] 무기 교체·상태 초기화 (액션이 설정에 없으면 연결하지 않음)
+	// 무기 교체(Tab, 정식 기능) (액션이 설정에 없으면 연결하지 않음)
 	if (const UInputAction* SwapAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Debug_SwapWeapon, false))
 	{
 		EIC->BindAction(SwapAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_SwapWeapon);
 	}
+#if !UE_BUILD_SHIPPING
+	// [테스트] 상태 초기화(F5)·보스방 문 앞 이동(F6). 배포(Shipping) 빌드에서는 연결하지 않는다.
 	if (const UInputAction* ResetAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Debug_Reset, false))
 	{
 		EIC->BindAction(ResetAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_Reset);
@@ -144,6 +146,7 @@ void AODPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 	{
 		EIC->BindAction(BossDoorAction, ETriggerEvent::Started, this, &ThisClass::Input_Debug_GoToBossDoor);
 	}
+#endif
 
 	// 일시정지 메뉴 (게임이 멈춘 동안에도 다시 눌러 닫을 수 있게 액션에 bTriggerWhenPaused가 켜져 있어야 한다)
 	if (const UInputAction* PauseAction = InputConfig->FindNativeInputActionForTag(ODGameplayTags::InputTag_Pause, false))
