@@ -58,6 +58,7 @@ Git 저장소는 용량 최적화와 속도를 위해 **'순수 텍스트(소스
 
 - **추적 대상:** `Source/`, `Config/`, `.uproject`, `.Build.cs`/`.Target.cs`, `.gitignore`, `.gitattributes`, `.mcp.json`, `.vsconfig`, `ValidateBuild.bat`, `CLAUDE.md`, `README.md`, `Docs/`(기획 문서), `Tools/`(MCP 브리지 등 개발 도구)
 - **에셋 추적 영구 금지:** 바이너리 에셋(`.uasset`, `.umap`, `.fbx`, `.png` 등)이 있는 `Content/` 폴더는 절대 스테이징(`git add`)하거나 추적하지 않는다. 에셋 조작이 필요하면 사용자에게 알린다.
+  - **예외 (2026-11-26 사용자 승인):** README용 스크린샷은 `Docs/Images/`에 JPG(가로 1280px 이하, 장당 300KB 이하)로만 추적한다.
 - **빌드/임시 폴더 추적 금지:** `Binaries/`, `Intermediate/`, `Saved/`, `DerivedDataCache/`, `.vs/`와 IDE가 생성하는 `*.sln`/`*.slnx`는 커밋하지 않는다.
 - **`git add -A` / `git add .` 금지:** 변경한 파일만 경로를 지정해 스테이징하고, 커밋 전에 `git status`로 의도하지 않은 파일이 없는지 확인한다.
 - **브랜치 구조 (Main-Dev):**
